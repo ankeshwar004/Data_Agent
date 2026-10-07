@@ -1,5 +1,4 @@
-from database.connection import pool , init_db, create_tables , close_db
-from database.schema import create_tables
+from database.connection import pool, init_db, create_tables, close_db
 from database.loader import load_csv
 
 

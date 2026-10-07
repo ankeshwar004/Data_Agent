@@ -1,5 +1,4 @@
 CREATE TABLE IF NOT EXISTS users (
-    id GENERATED ALWAYS AS IDENTITY,
     user_id INTEGER PRIMARY KEY,
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
@@ -14,7 +13,6 @@ CREATE TABLE IF NOT EXISTS users (
 
 
 CREATE TABLE IF NOT EXISTS vehicles (
-    id GENERATED ALWAYS AS IDENTITY,
     vehicle_id INTEGER PRIMARY KEY,
     driver_id INTEGER NOT NULL,
     make VARCHAR(50),
@@ -51,7 +49,7 @@ CREATE TABLE IF NOT EXISTS rides (
     surge_multiplier DECIMAL(4,2),
 
     status VARCHAR(30),
-    cancellation_rea on VARCHAR(100),
+    cancellation_reason VARCHAR(100),
 
     CONSTRAINT fk_ride_rider
         FOREIGN KEY (rider_id)
@@ -135,5 +133,3 @@ CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id);
 CREATE INDEX IF NOT EXISTS idx_ratings_ride_id ON ratings(ride_id);
 
 CREATE INDEX IF NOT EXISTS idx_ratings_driver_id ON ratings(driver_id);
-
-

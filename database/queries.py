@@ -1,6 +1,7 @@
 from database.connection import pool
 
-def get_schema_details(schema_name: str):
+
+def get_schema_details(schema_name: str)-> list | None:
     with pool.connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -16,7 +17,7 @@ def get_schema_details(schema_name: str):
         
         
         
-def execute_query(query: str, params=None):
+def execute_query(query: str, params=None)-> list | None:
     with pool.connection() as conn:
         with conn.cursor() as cur:
             cur.execute(query, params)
