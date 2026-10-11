@@ -107,6 +107,23 @@ routing_prompt = PromptTemplate.from_template(
     query={messages}
     You are a routing agent that decides whether the user's question should be handled by the SQL agent or the ETL agent.
     """)
-    
-    
+
+
+extract_query_entities_prompt = PromptTemplate.from_template(
+    """
+    You are an expert financial analyst assistant.
+    Your task is to analyze the user's question and extract the relevant stock ticker, financial datasets, and fiscal/calendar years.
+
+    Guidelines:
+    1. ticker: Extract the standard stock ticker in uppercase (e.g. "Apple" -> "AAPL", "Microsoft" -> "MSFT", "NVDA" -> "NVDA"). If not specified or uncertain, return an empty string.
+    2. datasets: Identify which financial statement datasets are needed to answer the question:
+       - "income_statement": for revenue, sales, net income, operating expenses, gross profit, EBITDA, EPS, profit margins, etc.
+       - "balance_sheet": for total assets, liabilities, debt, cash, equity, inventory, working capital, etc.
+       - "cash_flow_statement": for operating cash flow, free cash flow, capital expenditure (CapEx), dividends paid, financing cash flows, etc.
+    3. periods: List the explicit or implied 4-digit years requested as a list of integers, sorted ascending (e.g., [2021, 2022, 2023]).
+       If no specific year is mentioned, leave the list empty.
+
+    User Question: {user_query}
+    """
+)
     

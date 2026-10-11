@@ -1,13 +1,21 @@
-from database.connection import pool, init_db, create_tables, close_db
-from database.loader import load_csv
+from database.connection import db_connection
+
+
+TABLES_TO_CHECK = [
+    "companies",
+    "income_statements",
+    "balance_sheets",
+    "cash_flow_statements",
+]
 
 
 def verify_table_existence():
-    tables_to_check = ["users", "vehicles", "rides", "payments", "ratings"]
-    with pool.connection() as conn:
+    """Verify that all expected tables exist in the database."""
+
+    with db_connection.pool.connection() as conn:
         with conn.cursor() as cur:
-            
-            for table in tables_to_check:
+
+            for table in TABLES_TO_CHECK:
                 cur.execute(
                     """
                     SELECT EXISTS (
@@ -18,34 +26,26 @@ def verify_table_existence():
                     """,
                     (table,),
                 )
-                exists = cur.fetchone()[0]
-                
+                row = cur.fetchone()
+                exists = row["exists"]
+
                 if not exists:
                     raise Exception(f"Table '{table}' does not exist in the database.")
+
+    print(f"All {len(TABLES_TO_CHECK)} tables verified.")
 
 
 def main():
 
-    init_db()
+    db_connection.init_db()
 
     try:
-        create_tables()
-
+        db_connection.create_tables()
         verify_table_existence()
-
-        load_csv("users","users.csv")
-
-        load_csv("vehicles","vehicles.csv",)
-
-        load_csv("rides","rides.csv")
-        
-        load_csv("payments","payments.csv")
-
-        load_csv("ratings","ratings.csv")
-        
+        print("Database schema initialised successfully.")
 
     finally:
-        close_db()
+        db_connection.close_db()
 
 
 if __name__ == "__main__":

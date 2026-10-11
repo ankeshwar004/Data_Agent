@@ -2,7 +2,7 @@ import os
 import config
 
 from database.database import DatabaseUtils
-from database.connection import pool
+from database.connection import db_connection
 from Models.schema import AgentSchema, JudgeSchema
 from utils.llm_picker import get_llm
 from utils.prompts import prompt_generate_sql_query , sql_query_judge_prompt, final_answer_prompt, curate_question_prompt
@@ -37,7 +37,7 @@ def generate_sql_query(state: AgentSchema)-> AgentSchema:
     
     curated_ques=state.curated_ques
     
-    database_obj = DatabaseUtils(pool)
+    database_obj = DatabaseUtils(db_connection)
     schema_details = database_obj.schema_details(config.DATABASE_SCHEMA, include_sample_data=True)
     
     llm=get_llm("low")
@@ -90,7 +90,7 @@ def execute_sql_query(state: AgentSchema)-> AgentSchema:
     """
     sql_query=state.generated_sql_query
     
-    database_obj = DatabaseUtils(pool)
+    database_obj = DatabaseUtils(db_connection)
     result = database_obj.execute_sql_query(sql_query)
     
     state.sql_query_result=str(result)
@@ -114,5 +114,4 @@ def generate_final_answer(state: AgentSchema)-> AgentSchema:
     state.messages=state.messages + [AIMessage(content=f"{response}")]
     
     return state
-
 

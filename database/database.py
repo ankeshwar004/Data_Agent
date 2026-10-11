@@ -1,12 +1,12 @@
-from database.connection import pool
+from database.connection import DatabaseConnection
 from psycopg import sql
 import re
 
 
 class DatabaseUtils:
 
-    def __init__(self,pool):
-        self.pool=pool
+    def __init__(self, connection: DatabaseConnection):
+        self.connection = connection
 
 
     def schema_details(self,schema_name: str, include_sample_data: bool = True)-> str:
@@ -18,7 +18,7 @@ class DatabaseUtils:
         schema_details=[]
         schema_details.append(f"Database Schema Details for '{schema_name}':")
         
-        with self.pool.connection() as conn:
+        with self.connection.pool.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -58,7 +58,7 @@ class DatabaseUtils:
                     )
                     
                     cur.execute(query)
-                    schema_details.append(f" Total Rows: {cur.fetchone()[0]}")
+                    schema_details.append(f" Total Rows: {cur.fetchone()['count']}")
                     
                     if include_sample_data:
                                             
@@ -86,7 +86,7 @@ class DatabaseUtils:
         if ";" in normalized.rstrip(";"):
             raise ValueError("Multiple SQL statements are not permitted.")
 
-        with self.pool.connection() as conn:
+        with self.connection.pool.connection() as conn:
             with conn.cursor() as cur:
 
                 cur.execute(query)

@@ -1,8 +1,8 @@
-from database.connection import pool
+from database.connection import db_connection
 
 
 def get_schema_details(schema_name: str)-> list | None:
-    with pool.connection() as conn:
+    with db_connection.pool.connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -18,7 +18,7 @@ def get_schema_details(schema_name: str)-> list | None:
         
         
 def execute_query(query: str, params=None)-> list | None:
-    with pool.connection() as conn:
+    with db_connection.pool.connection() as conn:
         with conn.cursor() as cur:
             cur.execute(query, params)
             if cur.description:  

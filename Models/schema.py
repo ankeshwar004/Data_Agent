@@ -64,9 +64,52 @@ class RouterSchema(BaseModel):
     comments: str = Field(description="Comments or feedback provided by the agent regarding the routing decision")
 
 
+
 class DataAgentSchema(BaseModel):
-    messages: list = Field(
-        default_factory=list,
-        description="List of messages to be processed by the agent",
+    messages: list = Field(default_factory=list,description="List of messages to be processed by the agent")
+    user_query: str = Field(default="",description="User's original query that needs to be answered by the agent")
+
+    ticker: str = ""
+    requested_datasets: list[str] = Field(default_factory=list,description="List of datasets requested by the user")
+    required_periods: list[int] = Field(default_factory=list)
+
+    available_data: dict = Field(default_factory=dict)
+    missing_data: dict = Field(default_factory=dict)
+
+    next_action: Literal[
+        "inspect_data",
+        "query_database",
+        "fetch_missing_data",
+        "verify_result",
+        "finish",
+        "fail",
+    ] = "inspect_data"
+
+    observations: list[str] = Field(default_factory=list,description="List of observations made by the agent during the data processing")
+    attempts: int = 0
+    max_attempts: int = 3
+
+    verification_passed: bool = False
+    router_response: Literal["sql", "etl"] | None = None
+    final_answer: str = ""
+
+
+
+class AutonomousAgentState(BaseModel):
+    pass
+
+
+
+class QueryExtractionSchema(BaseModel):
+    ticker: str = Field(
+        default="",
+        description="Stock ticker symbol in uppercase, e.g., 'AAPL', 'MSFT', 'TSLA'. If not identified, leave empty.",
     )
-    router_response: Literal["sql", "etl"] | None = Field(default=None,description="Response from the router agent indicating whether to route to SQL or ETL agent")
+    datasets: list[Literal["income_statement", "balance_sheet", "cash_flow_statement"]] = Field(
+        default_factory=list,
+        description="Relevant financial statement datasets requested or implied by the query.",
+    )
+    periods: list[int] = Field(
+        default_factory=list,
+        description="Calendar or fiscal years explicitly mentioned or deduced from the query, e.g., [2022, 2023, 2024].",
+    )

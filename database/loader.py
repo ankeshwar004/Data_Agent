@@ -2,7 +2,7 @@ import os
 import config
 import csv
 from psycopg import sql
-from database.connection import pool
+from database.connection import db_connection
 
 
 
@@ -42,10 +42,11 @@ def load_csv(table_name: str, csv_file_name: str):
                         sql.SQL(', ').join(sql.Identifier(col) for col in columns) if columns else sql.SQL('*')
                          )
                     
-    with pool.connection() as conn:
+    with db_connection.pool.connection() as conn:
         with conn.cursor() as cur:
-            with open(file_path, 'r') as f:
-                cur.copy_expert(copy_sql, f)
+            with cur.copy(copy_sql) as copy:
+                with open(file_path, 'rb') as f:
+                    while chunk := f.read(8192):
+                        copy.write(chunk)
             conn.commit()
                      
-     

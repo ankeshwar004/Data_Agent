@@ -4,14 +4,14 @@ def get_llm(level: str):
     if level == "low":
         from langchain_openai import ChatOpenAI
 
-        return ChatOpenAI(model="gpt-4", temperature=0)
+        return ChatOpenAI(model="gpt-4o-mini", temperature=0)
     elif level == "medium":
+        from langchain_openai import ChatOpenAI
+
+        return ChatOpenAI(model="gpt-4o", temperature=0)
+    elif level == "high":
         from langchain_anthropic import ChatAnthropic
 
-        return ChatAnthropic(model="claude-v1", temperature=0)
-    elif level == "high":
-        from langchain_google_vertexai import ChatVertexAI
-
-        return ChatVertexAI(model_name="chat-bison", temperature=0)
+        return ChatAnthropic(model="claude-sonnet-4-20250514", temperature=0)
     else:
         raise ValueError(f"Invalid LLM level: {level}")

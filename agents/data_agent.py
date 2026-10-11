@@ -1,13 +1,38 @@
 from utils.llm_picker import get_llm
 from utils.etl_tools import ETLTools
-from utils.prompts import routing_prompt
-from Models.schema import DataAgentSchema, RouterSchema
+from utils.prompts import routing_prompt, extract_query_entities_prompt
+from Models.schema import DataAgentSchema, RouterSchema, QueryExtractionSchema
 from agents.etl_agent import build_etl_graph
 from agents.sql_graph import build_sql_graph
 
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langgraph.graph import StateGraph, START, END
 from langchain.tools import tool
+
+
+def extract_query_entities(state: DataAgentSchema) -> DataAgentSchema:
+    """
+    Extracts ticker symbol, requested financial datasets, and periods/years
+    from the user query using structured output.
+    """
+    query = state.user_query
+    if not query and state.messages:
+        query = state.messages[-1].content
+
+    llm = get_llm("low").with_structured_output(QueryExtractionSchema)
+    chain = extract_query_entities_prompt | llm
+    extraction: QueryExtractionSchema = chain.invoke({"user_query": query})
+
+    state.ticker = extraction.ticker.strip().upper()
+    state.requested_datasets = list(extraction.datasets)
+    state.required_periods = sorted(list(set(extraction.periods)))
+
+    return state
+
+
+def plan_node(state: DataAgentSchema) -> DataAgentSchema:
+    pass
+
 
 
 def router_node(state: DataAgentSchema) -> DataAgentSchema:

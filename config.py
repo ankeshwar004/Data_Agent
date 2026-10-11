@@ -18,3 +18,6 @@ DATABASE_URL=os.getenv("DATABASE_URL",f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB
 DATABASE_PATH = os.getenv("DATABASE_PATH", str(PROJECT_ROOT / "database"))
 CSV_PATH = os.getenv("CSV_PATH", str(PROJECT_ROOT / "data"))
 DATABASE_SCHEMA = os.getenv("DATABASE_SCHEMA", "public")
+
+
+FMP_BASE_URL = "https://financialmodelingprep.com/stable"
