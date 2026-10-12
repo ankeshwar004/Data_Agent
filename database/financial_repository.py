@@ -131,7 +131,6 @@ def prepare_params(mapped: dict, **extras) -> dict:
     return params
 
 
-# ── Public upsert functions ──────────────────────────────────────────────
 
 def upsert_company(mapped: dict) -> int:
     query = build_upsert_query(
