@@ -5,9 +5,13 @@ from Models.schema import DataAgentSchema, RouterSchema, QueryExtractionSchema
 from agents.etl_agent import build_etl_graph
 from agents.sql_graph import build_sql_graph
 
+from database.coverage import check_requested_coverage
+from database.etl_service import fetch_and_load_financial_data
+
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langgraph.graph import StateGraph, START, END
 from langchain.tools import tool
+
 
 
 def extract_query_entities(state: DataAgentSchema) -> DataAgentSchema:
@@ -30,8 +34,25 @@ def extract_query_entities(state: DataAgentSchema) -> DataAgentSchema:
     return state
 
 
-def plan_node(state: DataAgentSchema) -> DataAgentSchema:
-    pass
+def inspect_data_node(state: DataAgentSchema) -> DataAgentSchema:
+
+    coverage = check_requested_coverage(ticker=state.ticker,datasets=state.requested_datasets,required_years=state.required_periods)
+
+    state.available_data = {
+        dataset: result["available_years"]
+        for dataset, result in coverage["datasets"].items()
+    }
+
+    state.missing_data = coverage["missing_data"]
+
+    state.observations.append(
+        f"Database coverage checked for {state.ticker}: "
+        f"complete={coverage['complete']}"
+    )
+
+    state.next_action = "query_database" if coverage["complete"] else "fetch_missing_data"
+
+    return state
 
 
 
@@ -54,17 +75,35 @@ def router_node(state: DataAgentSchema) -> DataAgentSchema:
 
 
 def etl_node(state: DataAgentSchema) -> DataAgentSchema:
-    """
-    Routes the user's query to the ETL agent for processing.
-    """
-    messages = state.messages[-1].content
-    
-    etl_graph = build_etl_graph()
-    response = etl_graph.invoke({"messages": [HumanMessage(content=f"Query: {messages}")]})
-    
-    state.messages = state.messages+ response["messages"]
-    
+    """Fetch missing financial data using deterministic ETL."""
+
+    if not state.ticker:
+        state.observations.append("ETL failed: ticker is missing.")
+        state.next_action = "fail"
+        return state
+
+    if not state.requested_datasets or not state.required_periods:
+        state.observations.append( "ETL failed: requested datasets or years are missing.")
+        state.next_action = "fail"
+        return state
+
+    all_success = True
+
+    for dataset in state.requested_datasets:
+        result = fetch_and_load_financial_data(ticker=state.ticker,dataset=dataset,required_years=state.required_periods)
+
+        state.observations.append(f"ETL result for {dataset}: {result}")
+
+        if not result["success"]:
+            all_success = False
+
+    if all_success:
+        state.next_action = "inspect_data"
+    else:
+        state.next_action = "fail"
+
     return state
+
 
 
 def sql_node(state: DataAgentSchema) -> DataAgentSchema:
@@ -89,26 +128,34 @@ def build_data_agent_graph():
     """
     graph = StateGraph(DataAgentSchema)
     
+    graph.add_node("extract_query_entities", extract_query_entities)
+    graph.add_node("inspect_data_node", inspect_data_node)
     graph.add_node("router_node", router_node)
     graph.add_node("etl_node", etl_node)
     graph.add_node("sql_node", sql_node)
     
-    def is_sql_or_etl(state: DataAgentSchema):
-        if state.router_response == "sql":
-            return "sql_node"
-        elif state.router_response == "etl":
-            return "etl_node"
-        else:
-            return "END"
+    def route_request_type(state: DataAgentSchema):
+        return "extract_query_entities" if state.router_response == "sql" else "etl_node"
+
+    def route_after_inspection(state: DataAgentSchema):
+        return "sql_node" if state.next_action == "query_database" else "etl_node"
     
     graph.add_edge(START, "router_node")
     graph.add_conditional_edges(
-        "router_node", is_sql_or_etl,
+        "router_node", route_request_type,
+        {
+            "extract_query_entities": "extract_query_entities",
+            "etl_node": "etl_node",
+        }
+    )
+    graph.add_edge("extract_query_entities", "inspect_data_node")
+    graph.add_conditional_edges(
+        "inspect_data_node",
+        route_after_inspection,
         {
             "sql_node": "sql_node",
             "etl_node": "etl_node",
-            "END": END
-        }
+        },
     )
     
     graph.add_edge("sql_node", END)
