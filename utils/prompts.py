@@ -73,29 +73,11 @@ curate_question_prompt = PromptTemplate.from_template(
     {user_question}
     """)
 
-
-
-transform_load_prompt = PromptTemplate.from_template(
-    """
-    You are a Python Data Analyst who uses Pandas to analyze data. 
-    You need to provide only the Pandas Code that will help to perform the right ETL operations on the data stored in the file : {input_file_path}
-    as per the user's question. Do not provide any explanation or comments, only
-    the code should be provided. The code should be in a format that can be executed 
-    in a Python environment with Pandas installed. 
-    Don't write anything else than Pandas Code. \n
-    
-    Create the Pandas Dataframe from the data stored in the file : {input_file_path} and then 
-    write the code to transform and save the data at {output_folder}.
-    Here's the user's question: {user_question}\n
-    Here's the context of the data you will be analyzing: {context_row}\n 
-    """)
-
-
 etl_prompt = PromptTemplate.from_template(
     """
-    You are a Python Data Analyst who has access to tools that can extract and load, 
-    transform and load data. You will be provided with a user's question 
-    and you would need to perform the right ETL operations as per the user's question. 
+    You are a data ETL agent with access to an extraction tool and a financial
+    statement ETL tool. You will be provided with a user's question and you
+    need to perform the appropriate ETL operation.
     If the operation is performed then inform the user and end the coversation.
     Here's the chat history: {messages}\n
 
