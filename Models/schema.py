@@ -95,9 +95,13 @@ class DataAgentSchema(BaseModel):
 
 
 
-class AutonomousAgentState(BaseModel):
-    pass
-
+class ETLLoadOutcome(BaseModel):
+    ticker: str
+    dataset: str
+    status: Literal["SUCCESS", "PARTIAL", "UNAVAILABLE", "FAILED"]
+    loaded_years: list[int] = Field(default_factory=list)
+    missing_years: list[int] = Field(default_factory=list)
+    error_message: str | None = None
 
 
 class QueryExtractionSchema(BaseModel):
