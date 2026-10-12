@@ -142,7 +142,7 @@ def check_requested_coverage(ticker: str, datasets: list[str], required_years: l
 
     datasets = list(dict.fromkeys(datasets))
 
-    unsupported = [datasetfor dataset in datasetsif dataset not in DATASET_TABLES]
+    unsupported = [dataset for dataset in datasets if dataset not in DATASET_TABLES]
     
     if unsupported:
         raise ValueError(f"Unsupported datasets: {unsupported}")
