@@ -1,4 +1,5 @@
 import os
+import logging
 import config
 
 from database.database import DatabaseUtils
@@ -14,6 +15,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langgraph.graph import END, START, StateGraph
 
 
+logger = logging.getLogger(__name__)
 
 
 def curate_ques(state:AgentSchema)-> AgentSchema:
@@ -40,6 +42,7 @@ def generate_sql_query(state: AgentSchema)-> AgentSchema:
     """
     
     curated_ques=state.curated_ques
+    logger.info("Generating SQL query.")
     
     database_obj = DatabaseUtils(db_connection)
     schema_details = database_obj.schema_details(config.DATABASE_SCHEMA, include_sample_data=True)
@@ -65,6 +68,7 @@ def is_sql_query_safe(state: AgentSchema)-> AgentSchema:
     """
     
     sql_query=state.generated_sql_query
+    logger.info("Checking SQL query safety.")
     
     llm=get_llm("low")
     llm_judge = llm.with_structured_output(JudgeSchema)
@@ -98,6 +102,7 @@ def execute_sql_query(state: AgentSchema)-> AgentSchema:
     Executes the generated SQL query and stores the result in the state.
     """
     sql_query=state.generated_sql_query
+    logger.info("Executing SQL query.")
     
     database_obj = DatabaseUtils(db_connection)
     success,result = database_obj.execute_sql_query(sql_query)

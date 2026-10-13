@@ -2,8 +2,11 @@ from database.connection import DatabaseConnection
 from psycopg import sql
 from psycopg.errors import QueryCanceled
 from typing import Tuple
+import logging
 import re
 
+
+logger = logging.getLogger(__name__)
 
 
 class DatabaseUtils:
@@ -85,6 +88,7 @@ class DatabaseUtils:
         Executes the provided SQL query if it is a valid read-only query and returns the result.
         """
         normalized = query.strip()
+        logger.info("Running SQL query.")
         try:
             if ";" in normalized.rstrip(";"):
                 raise ValueError("Multiple SQL statements are not permitted.")
@@ -98,16 +102,19 @@ class DatabaseUtils:
                     cur.execute(query)
 
                     if cur.description:           # if the query returns rows (e.g., SELECT), fetch and return them
-                        return True , cur.fetchall()
+                        result = cur.fetchall()
+                        logger.info("SQL query completed successfully.")
+                        return True, result
 
+                    logger.info("SQL query completed with no returned rows.")
                     return True , "No data returned from the query."  
 
         except QueryCanceled as e:
-            print("Query canceled due to timeout.")
+            logger.warning("SQL query canceled due to timeout.")
             return False , "Query canceled due to timeout."
         
         except Exception as e:
-            print(f"Error executing SQL query: {e}")
+            logger.error("Error executing SQL query: %s", e)
             return False , str(e)
         
 

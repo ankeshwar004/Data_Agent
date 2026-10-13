@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from collections.abc import Sequence
 
 from agents.data_agent import build_data_agent_graph
 from database.connection import db_connection
+
+
+logger = logging.getLogger(__name__)
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -38,20 +42,22 @@ def run(question: str) -> str:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Initialize dependencies, run the agent, and clean up resources."""
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     args = parse_args(argv)
     question = args.question or sys.stdin.readline().strip()
     if not question.strip():
-        print("Error: A non-empty question is required.", file=sys.stderr)
+        logger.error("A non-empty question is required.")
         return 1
 
     database_started = False
     try:
+        logger.info("Starting data agent.")
         db_connection.init_db()
         database_started = True
         print(run(question))
         return 0
     except (RuntimeError, ValueError) as error:
-        print(f"Error: {error}", file=sys.stderr)
+        logger.error("%s", error)
         return 1
     finally:
         if database_started:
