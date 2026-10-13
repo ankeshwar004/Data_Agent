@@ -24,3 +24,5 @@ FMP_BASE_URL = "https://financialmodelingprep.com/stable"
 RECORD_LIMIT=5
 
 PNG_PATH = os.path.join(PROJECT_ROOT, "graph_png")
+
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
