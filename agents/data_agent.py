@@ -128,6 +128,18 @@ def sql_node(state: DataAgentSchema) -> DataAgentSchema:
     """
     query = state.user_query
     
+    state.sql_attempts += 1
+
+    
+    # Reset the previous attempt's status.
+    state.sql_execution_success = False
+    state.sql_error = None
+    state.sql_query_result = ""
+    state.generated_sql_query = ""
+    state.final_answer = ""
+    state.verification_passed = False
+    state.verification_reason = ""
+    
     sql_graph = build_sql_graph()
     response = sql_graph.invoke(
         {"user_query": query, "messages": [HumanMessage(content=query)]}
@@ -137,13 +149,14 @@ def sql_node(state: DataAgentSchema) -> DataAgentSchema:
     state.sql_query_result = response.get("sql_query_result", "")
     state.final_answer = response.get("final_answer", "")
     
+    state.sql_execution_success = response.get("sql_execution_success", False)
+    state.sql_error = response.get("sql_execution_error","")
+    
     state.messages = state.messages + response.get("messages", [])
     
-    state.sql_attempts += 1
     state.observations.append(
         f"SQL agent attempt: {state.sql_attempts}, "
         f"generated_sql_query: {state.generated_sql_query}, "
-       
     )
     
     state.next_action = "verify_result"
@@ -152,22 +165,38 @@ def sql_node(state: DataAgentSchema) -> DataAgentSchema:
 
 
 
-def verify_result_node(state: DataAgentSchema) -> DataAgentSchema:
+def verify_result_node(state):
     """
-    Verifies the SQL query result and determines whether to finish or fail.
+    Verifies the result of the SQL query execution and determines the next action based on the verification outcome.
     """
-    if state.sql_query_result.strip() and state.final_answer.strip():
+    if not state.sql_execution_success:
+        state.verification_passed = False
+        state.verification_reason = state.sql_error
+
+    elif not state.final_answer.strip():
+        state.verification_passed = False
+        state.verification_reason = "SQL executed successfully, but no final answer was generated."
+
+    else:
         state.verification_passed = True
+        state.verification_reason = "SQL execution succeeded and a final answer was generated."
+
+    state.observations.append(
+        f"Verification passed: {state.verification_reason}"
+        if state.verification_passed
+        else f"Verification failed: {state.verification_reason}"
+    )
+
+    if state.verification_passed:
         state.next_action = "finish"
-        state.observations.append("SQL query result verified successfully.")
-        
+
     elif state.sql_attempts < state.max_sql_attempts:
         state.next_action = "query_database"
-        state.observations.append("SQL query result verification failed, retrying.")
+        state.observations.append(f"Retrying SQL; attempt budget is {state.max_sql_attempts}.")
+
     else:
-        state.verification_passed = False
         state.next_action = "fail"
-        state.observations.append("SQL query result verification failed.")
+        state.observations.append("SQL attempt limit reached; stopping safely.")
 
     return state
 

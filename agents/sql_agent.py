@@ -81,6 +81,7 @@ def canceled_sql_query(state: AgentSchema)-> AgentSchema:
     """
     
     comments=state.comments
+    state.sql_execution_success = False
     state.final_answer=f"SQL Query is not safe to execute. Comments: {comments}"
     state.messages=state.messages + [AIMessage(content=f"{state.final_answer}")]
     
@@ -95,10 +96,19 @@ def execute_sql_query(state: AgentSchema)-> AgentSchema:
     sql_query=state.generated_sql_query
     
     database_obj = DatabaseUtils(db_connection)
-    result = database_obj.execute_sql_query(sql_query)
+    success,result = database_obj.execute_sql_query(sql_query)
     
-    state.sql_query_result=str(result)
-    
+    if success:
+        state.sql_query_result=str(result)
+        state.sql_execution_success = True
+        state.sql_execution_error = None
+        
+    else:
+        state.sql_query_result=""
+        state.sql_execution_success = False
+        state.sql_execution_error = result  # Store the error message in the state
+        
+        
     return state
 
 
@@ -118,8 +128,6 @@ def generate_final_answer(state: AgentSchema)-> AgentSchema:
     state.messages=state.messages + [AIMessage(content=f"{response}")]
     
     return state
-
-
 
 
 
