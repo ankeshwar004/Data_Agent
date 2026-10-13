@@ -1,10 +1,12 @@
+import config
+
 def get_llm(level: str):
     level=level.lower()
     
     if level == "low":
-        from langchain_openai import ChatOpenAI
+        from langchain_openrouter import ChatOpenRouter
 
-        return ChatOpenAI(model="gpt-4o-mini", temperature=0)
+        return ChatOpenRouter(model="nvidia/nemotron-3-ultra-550b-a55b:free", temperature=0, api_key=config.OPENROUTER_API_KEY)
     elif level == "medium":
         from langchain_openai import ChatOpenAI
 
