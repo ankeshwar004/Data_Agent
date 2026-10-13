@@ -37,6 +37,8 @@ def check_company_profile_coverage(ticker: str) -> dict:
             )
             company = cur.fetchone()
 
+    complete = company is not None
+
     return {
         "ticker": ticker,
         "dataset": "companies",

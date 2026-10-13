@@ -18,6 +18,9 @@ prompt_generate_sql_query = ChatPromptTemplate.from_messages([
      """
         User's original query: {curated_ques}
         Schema details: {schema_info}
+
+        Retry context:
+        {retry_context}
     """)
 ])
 
@@ -87,17 +90,22 @@ etl_prompt = PromptTemplate.from_template(
 
 extract_query_entities_prompt = PromptTemplate.from_template(
     """
-    You are an expert financial analyst assistant.
-    Your task is to analyze the user's question and extract the relevant stock ticker, financial datasets, and fiscal/calendar years.
+    You are an expert company and financial data assistant.
+    Your task is to analyze the user's question and extract the relevant company
+    profile or financial datasets and fiscal/calendar years.
 
     Guidelines:
     1. ticker: Extract the standard stock ticker in uppercase (e.g. "Apple" -> "AAPL", "Microsoft" -> "MSFT", "NVDA" -> "NVDA"). If not specified or uncertain, return an empty string.
-    2. datasets: Identify which financial statement datasets are needed to answer the question:
+    2. datasets: Identify which datasets are needed to answer the question:
+       - "companies": for company profile, identity, headquarters, industry,
+         sector, website, description, market capitalization, or other
+         non-financial company information.
        - "income_statement": for revenue, sales, net income, operating expenses, gross profit, EBITDA, EPS, profit margins, etc.
        - "balance_sheet": for total assets, liabilities, debt, cash, equity, inventory, working capital, etc.
        - "cash_flow_statement": for operating cash flow, free cash flow, capital expenditure (CapEx), dividends paid, financing cash flows, etc.
     3. periods: List the explicit or implied 4-digit years requested as a list of integers, sorted ascending (e.g., [2021, 2022, 2023]).
-       If no specific year is mentioned, leave the list empty.
+       If no specific year is mentioned, leave the list empty. Company-profile
+       questions do not require a year.
 
     User Question: {user_query}
     """

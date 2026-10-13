@@ -130,7 +130,18 @@ def sql_node(state: DataAgentSchema) -> DataAgentSchema:
     Routes the user's query to the SQL agent for processing.
     """
     query = state.user_query
-    
+    previous_sql = state.generated_sql_query
+    previous_sql_error = state.sql_error or ""
+    previous_verification_reason = state.verification_reason
+    retry_context = (
+        f"This is SQL attempt {state.sql_attempts + 1} of {state.max_sql_attempts}. "
+        "Correct the previous query using the execution error and verification feedback. "
+        "Do not repeat the same invalid query.\n"
+        f"Previous SQL: {previous_sql}\n"
+        f"SQL execution error: {previous_sql_error}\n"
+        f"Verification feedback: {previous_verification_reason}"
+    )
+
     state.sql_attempts += 1
 
     
@@ -145,7 +156,13 @@ def sql_node(state: DataAgentSchema) -> DataAgentSchema:
     
     sql_graph = build_sql_graph()
     response = sql_graph.invoke(
-        {"user_query": query, "messages": [HumanMessage(content=query)]}
+        {
+            "user_query": query,
+            "messages": [HumanMessage(content=query)],
+            "generated_sql_query": previous_sql,
+            "sql_execution_error": previous_sql_error,
+            "prompt_query_context": retry_context,
+        }
     )
     
     state.generated_sql_query = response.get("generated_sql_query", "")

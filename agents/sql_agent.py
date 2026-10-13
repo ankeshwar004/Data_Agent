@@ -47,7 +47,11 @@ def generate_sql_query(state: AgentSchema)-> AgentSchema:
     llm=get_llm("low")
     
     chain = prompt_generate_sql_query | llm | StrOutputParser()
-    response = chain.invoke({ "curated_ques": curated_ques, "schema_info": schema_details })
+    response = chain.invoke({
+        "curated_ques": curated_ques,
+        "schema_info": schema_details,
+        "retry_context": state.prompt_query_context,
+    })
     
     state.generated_sql_query=response
     
