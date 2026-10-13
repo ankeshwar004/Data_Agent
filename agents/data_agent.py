@@ -1,9 +1,9 @@
+import os
+import config
 from utils.llm_picker import get_llm
-from utils.etl_tools import ETLTools
-from utils.prompts import routing_prompt, extract_query_entities_prompt
-from Models.schema import DataAgentSchema, RouterSchema, QueryExtractionSchema
-from agents.etl_agent import build_etl_graph
-from agents.sql_graph import build_sql_graph
+from utils.prompts import extract_query_entities_prompt
+from Models.schema import DataAgentSchema, QueryExtractionSchema
+from agents.sql_agent import build_sql_graph
 
 from database.coverage import check_requested_coverage
 from database.etl_service import fetch_and_load_financial_data
@@ -35,6 +35,10 @@ def extract_query_entities(state: DataAgentSchema) -> DataAgentSchema:
 
 
 def inspect_data_node(state: DataAgentSchema) -> DataAgentSchema:
+    """
+    Inspects the database coverage for the requested datasets and periods.
+    It's main purpose is to determine which data is available and which is missing, guiding the next steps in the data processing workflow.
+    """
 
     coverage = check_requested_coverage(ticker=state.ticker,datasets=state.requested_datasets,required_years=state.required_periods)
 
@@ -46,62 +50,74 @@ def inspect_data_node(state: DataAgentSchema) -> DataAgentSchema:
     state.missing_data = coverage["missing_data"]
 
     state.observations.append(
-        f"Database coverage checked for {state.ticker}: "
-        f"complete={coverage['complete']}"
+        f"coverage checked for {state.ticker}: "
+        f"available_data={state.available_data}, "
+        f"missing_data={state.missing_data}"
     )
-
-    state.next_action = "query_database" if coverage["complete"] else "fetch_missing_data"
 
     return state
 
 
+def next_action_node(state: DataAgentSchema) -> DataAgentSchema:
+    """
+    Choose the next action from observed database state.
+    """
 
-def router_node(state: DataAgentSchema) -> DataAgentSchema:
-    """
-    Determines whether to route the user's query to the SQL agent or the ETL agent based on the content of the query.
-    """
-    llm = get_llm("low").with_structured_output(RouterSchema)
-    
-    messages = state.messages[-1].content
-    
-    response_chain = routing_prompt | llm
-    response = response_chain.invoke({"messages": messages}).model_dump()
-    
-    router_response = response.get("answer")
-    
-    state.router_response = router_response
-     
+    if not state.ticker:
+        state.next_action = "fail"
+        state.observations.append("Planning failed: ticker is missing.")
+        return state
+
+    if not state.requested_datasets:
+        state.next_action = "fail"
+        state.observations.append("Planning failed: no supported datasets requested.")
+        return state
+
+    if not state.required_periods:
+        state.next_action = "fail"
+        state.observations.append("Planning failed: reporting years are missing.")
+        return state
+
+    if not state.missing_data:
+        state.next_action = "query_database"
+        state.observations.append("Plan: required data is available; query PostgreSQL.")
+        return state
+
+    if state.attempts >= state.max_attempts:
+        state.next_action = "fail"
+        state.observations.append("Plan: ETL retry budget exhausted.")
+        return state
+
+    state.next_action = "fetch_missing_data"
+    state.observations.append(f"Plan: fetch missing data: {state.missing_data}")
+
     return state
 
 
 def etl_node(state: DataAgentSchema) -> DataAgentSchema:
-    """Fetch missing financial data using deterministic ETL."""
+    """
+    Fetch missing financial data using deterministic ETL.
+    """
 
-    if not state.ticker:
-        state.observations.append("ETL failed: ticker is missing.")
+    if state.attempts >= state.max_attempts:
         state.next_action = "fail"
+        state.observations.append("ETL failed: retry budget exhausted.")
         return state
+    
+    state.attempts += 1
 
-    if not state.requested_datasets or not state.required_periods:
-        state.observations.append( "ETL failed: requested datasets or years are missing.")
-        state.next_action = "fail"
-        return state
+    for dataset, missing_years in state.missing_data.items():
+        if not missing_years:
+            continue
+        result = fetch_and_load_financial_data(ticker=state.ticker,dataset=dataset,required_years=missing_years)
 
-    all_success = True
+        state.observations.append(
+            f"ETL result for {dataset}: {result}"
+            f" ETL attempt: {state.attempts}"
+        )
 
-    for dataset in state.requested_datasets:
-        result = fetch_and_load_financial_data(ticker=state.ticker,dataset=dataset,required_years=state.required_periods)
-
-        state.observations.append(f"ETL result for {dataset}: {result}")
-
-        if not result["success"]:
-            all_success = False
-
-    if all_success:
-        state.next_action = "inspect_data"
-    else:
-        state.next_action = "fail"
-
+    state.next_action = "inspect_data"
+    
     return state
 
 
@@ -110,55 +126,130 @@ def sql_node(state: DataAgentSchema) -> DataAgentSchema:
     """
     Routes the user's query to the SQL agent for processing.
     """
-    messages = state.messages[-1].content
+    query = state.user_query
     
     sql_graph = build_sql_graph()
     response = sql_graph.invoke(
-        {"user_query": messages, "messages": [HumanMessage(content=messages)]}
+        {"user_query": query, "messages": [HumanMessage(content=query)]}
     )
     
-    state.messages = state.messages + response["messages"]
+    state.generated_sql_query = response.get("generated_sql_query", "")
+    state.sql_query_result = response.get("sql_query_result", "")
+    state.final_answer = response.get("final_answer", "")
+    
+    state.messages = state.messages + response.get("messages", [])
+    
+    state.sql_attempts += 1
+    state.observations.append(
+        f"SQL agent attempt: {state.sql_attempts}, "
+        f"generated_sql_query: {state.generated_sql_query}, "
+       
+    )
+    
+    state.next_action = "verify_result"
     
     return state
 
 
+
+def verify_result_node(state: DataAgentSchema) -> DataAgentSchema:
+    """
+    Verifies the SQL query result and determines whether to finish or fail.
+    """
+    if state.sql_query_result.strip() and state.final_answer.strip():
+        state.verification_passed = True
+        state.next_action = "finish"
+        state.observations.append("SQL query result verified successfully.")
+        
+    elif state.sql_attempts < state.max_sql_attempts:
+        state.next_action = "query_database"
+        state.observations.append("SQL query result verification failed, retrying.")
+    else:
+        state.verification_passed = False
+        state.next_action = "fail"
+        state.observations.append("SQL query result verification failed.")
+
+    return state
+
+
+
+def failure_node(state: DataAgentSchema) -> DataAgentSchema:
+    """
+    Handles failure scenarios and sets the final answer accordingly.
+    """
+    
+    state.final_answer = f"""
+    Could not process the request for ticker '{state.ticker}'
+      Reason: {state.observations[-1] if state.observations else 'Unknown error'}"""
+
+    state.next_action = "fail"
+    return state
+
+
+
 def build_data_agent_graph():
     """
-    Builds a state graph for the data agent, defining the flow of states and transitions based on the agent's schema.
+    Builds and compiles the Data Agent graph.
     """
-    graph = StateGraph(DataAgentSchema)
     
+    graph = StateGraph(DataAgentSchema)
+
     graph.add_node("extract_query_entities", extract_query_entities)
     graph.add_node("inspect_data_node", inspect_data_node)
-    graph.add_node("router_node", router_node)
+    graph.add_node("next_action_node", next_action_node)
     graph.add_node("etl_node", etl_node)
     graph.add_node("sql_node", sql_node)
-    
-    def route_request_type(state: DataAgentSchema):
-        return "extract_query_entities" if state.router_response == "sql" else "etl_node"
+    graph.add_node("verify_result_node", verify_result_node)
+    graph.add_node("failure_node", failure_node)
 
-    def route_after_inspection(state: DataAgentSchema):
-        return "sql_node" if state.next_action == "query_database" else "etl_node"
+    graph.add_edge(START, "extract_query_entities")
     
-    graph.add_edge(START, "router_node")
-    graph.add_conditional_edges(
-        "router_node", route_request_type,
-        {
-            "extract_query_entities": "extract_query_entities",
-            "etl_node": "etl_node",
-        }
-    )
     graph.add_edge("extract_query_entities", "inspect_data_node")
+    graph.add_edge("inspect_data_node", "next_action_node")
+
+    def route_plan(state: DataAgentSchema):
+        return state.next_action
+
     graph.add_conditional_edges(
-        "inspect_data_node",
-        route_after_inspection,
+        "next_action_node",route_plan,
         {
-            "sql_node": "sql_node",
-            "etl_node": "etl_node",
-        },
-    )
-    
-    graph.add_edge("sql_node", END)
-    graph.add_edge("etl_node", END)
-    
+            "query_database": "sql_node",
+            "fetch_missing_data": "etl_node",
+            "fail": "failure_node",
+        },)
+
+    graph.add_edge("etl_node", "inspect_data_node")
+    graph.add_edge("sql_node", "verify_result_node")
+
+    def route_verification(state: DataAgentSchema):
+        if state.next_action == "finish":
+            return "finish"
+
+        if state.next_action == "query_database":
+            return "retry_sql"
+
+        return "fail"
+
+    graph.add_conditional_edges(
+        "verify_result_node",route_verification,
+        {
+            "finish": END,
+            "retry_sql": "sql_node",
+            "fail": "failure_node",
+        },)
+
+    graph.add_edge("failure_node", END)
+
     return graph.compile()
+
+
+if __name__ == "__main__":
+    
+    from IPython.display import Image, display
+    img = Image(build_data_agent_graph().get_graph().draw_mermaid_png())
+    
+    os.makedirs(config.PNG_PATH, exist_ok=True)
+    
+    path = os.path.join(config.PNG_PATH, "data_agent_graph.png")
+    with open(path, "wb") as f:
+        f.write(img.data)

@@ -3,12 +3,16 @@ import config
 
 from database.database import DatabaseUtils
 from database.connection import db_connection
+
 from Models.schema import AgentSchema, JudgeSchema
 from utils.llm_picker import get_llm
 from utils.prompts import prompt_generate_sql_query , sql_query_judge_prompt, final_answer_prompt, curate_question_prompt
+
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+from langgraph.graph import END, START, StateGraph
+
 
 
 
@@ -115,3 +119,54 @@ def generate_final_answer(state: AgentSchema)-> AgentSchema:
     
     return state
 
+
+
+
+
+
+def build_sql_graph():
+    """Build and compile the SQL agent graph."""
+    graph = StateGraph(AgentSchema)
+
+    graph.add_node("curate_ques", curate_ques)
+    graph.add_node("generate_sql", generate_sql_query)
+    graph.add_node("is_safe_sql", is_sql_query_safe)
+    graph.add_node("canceled_sql", canceled_sql_query)
+    graph.add_node("execute_sql", execute_sql_query)
+    graph.add_node("represent_final_answer", generate_final_answer)
+
+    graph.add_edge(START, "curate_ques")
+    graph.add_edge("curate_ques", "generate_sql")
+    graph.add_edge("generate_sql", "is_safe_sql")
+    
+    def is_safe_sql_edge(state: AgentSchema) -> str:
+        if state.is_safe == "Yes":
+            return "execute_sql"
+
+        return "canceled_sql"
+
+    graph.add_conditional_edges(
+        "is_safe_sql",
+        is_safe_sql_edge,
+        {
+            "execute_sql": "execute_sql",
+            "canceled_sql": "canceled_sql",
+        },
+    )
+
+    graph.add_edge("canceled_sql", END)
+    graph.add_edge("execute_sql", "represent_final_answer")
+    graph.add_edge("represent_final_answer", END)
+
+    return graph.compile()
+
+
+if __name__ == "__main__":
+       
+    from IPython.display import Image, display
+    img = Image(build_sql_graph().get_graph().draw_mermaid_png())
+    os.makedirs(config.PNG_PATH, exist_ok=True)
+    
+    path = os.path.join(config.PNG_PATH, "sql_agent_graph.png")
+    with open(path, "wb") as f:
+        f.write(img.data)
