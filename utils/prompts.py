@@ -84,12 +84,6 @@ etl_prompt = PromptTemplate.from_template(
     """)
 
 
-routing_prompt = PromptTemplate.from_template(
-    """
-    query={messages}
-    You are a routing agent that decides whether the user's question should be handled by the SQL agent or the ETL agent.
-    """)
-
 
 extract_query_entities_prompt = PromptTemplate.from_template(
     """
