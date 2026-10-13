@@ -80,7 +80,18 @@ def next_action_node(state: DataAgentSchema) -> DataAgentSchema:
 
     if state.attempts >= state.max_attempts:
         state.next_action = "fail"
-        state.observations.append("Plan: ETL retry budget exhausted.")
+        last_etl_error = next(
+            (
+                observation
+                for observation in reversed(state.observations)
+                if observation.startswith("ETL result")
+            ),
+            None,
+        )
+        state.observations.append(
+            "Plan: ETL retry budget exhausted."
+            + (f" Last result: {last_etl_error}" if last_etl_error else "")
+        )
         return state
 
     state.next_action = "fetch_missing_data"
