@@ -1,6 +1,9 @@
 from database.connection import DatabaseConnection
 from psycopg import sql
+from psycopg.errors import QueryCanceled
+from typing import Tuple
 import re
+
 
 
 class DatabaseUtils:
@@ -77,21 +80,35 @@ class DatabaseUtils:
     
     
     
-    def execute_sql_query(self, query: str)->list | None:
-        """Executes the provided SQL query and returns the result.
+    def execute_sql_query(self, query: str)-> tuple[bool, list[dict] | str ]:
+        """
+        Executes the provided SQL query if it is a valid read-only query and returns the result.
         """
         normalized = query.strip()
-        if not re.match(r"^(SELECT|WITH|EXPLAIN)\b", normalized, re.IGNORECASE):
-            raise ValueError("Only read-only SQL queries are permitted.")
-        if ";" in normalized.rstrip(";"):
-            raise ValueError("Multiple SQL statements are not permitted.")
+        try:
+            if ";" in normalized.rstrip(";"):
+                raise ValueError("Multiple SQL statements are not permitted.")
+            
+            with self.connection.pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SET TRANSACTION READ ONLY")
+                    
+                    cur.execute("SELECT set_config('statement_timeout', %s, true)",("5000ms",))  # Set a 5-second timeout for the query execution
 
-        with self.connection.pool.connection() as conn:
-            with conn.cursor() as cur:
+                    cur.execute(query)
 
-                cur.execute(query)
+                    if cur.description:           # if the query returns rows (e.g., SELECT), fetch and return them
+                        return True , cur.fetchall()
 
-                if cur.description:           # if the query returns rows (e.g., SELECT), fetch and return them
-                    return cur.fetchall()
+                    return True , "No data returned from the query."  
 
-                return None
+        except QueryCanceled as e:
+            print("Query canceled due to timeout.")
+            return False , "Query canceled due to timeout."
+        
+        except Exception as e:
+            print(f"Error executing SQL query: {e}")
+            return False , str(e)
+        
+
+      
