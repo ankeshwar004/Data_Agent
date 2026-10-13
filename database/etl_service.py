@@ -137,7 +137,16 @@ def fetch_and_load_financial_data(ticker: str, dataset: str, required_years: lis
         if not records:
             raise ValueError("No financial records fetched from FMP.")
         
-        unique_records = {record["fiscalYear"]: record for record in records if record.get("fiscalYear") in missing_years and record.get("period") == "FY"}
+        unique_records = {}
+        for record in records:
+            fiscal_year = record.get("fiscalYear")
+            try:
+                fiscal_year = int(fiscal_year)
+            except (TypeError, ValueError):
+                continue
+
+            if fiscal_year in missing_years and record.get("period") == "FY":
+                unique_records[fiscal_year] = record
         
         if not unique_records:
             raise ValueError("No valid financial records found for the requested years.")
