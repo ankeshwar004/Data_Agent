@@ -69,3 +69,23 @@ class FMPClient:
             )
 
         return data
+    
+    
+#  small test for the FMPClient class
+if __name__ == "__main__":
+    client = FMPClient()
+    try:
+        profile_data = client.fetch("profile", "AAPL")
+        print("Profile Data:", profile_data)
+        
+        income_statement_data = client.fetch("income-statement", "AAPL")
+        print("Income Statement Data:", income_statement_data)
+        
+        balance_sheet_data = client.fetch("balance-sheet-statement", "AAPL")
+        print("Balance Sheet Data:", balance_sheet_data)
+        
+        cash_flow_data = client.fetch("cash-flow-statement", "AAPL")
+        print("Cash Flow Data:", cash_flow_data)
+        
+    except Exception as e:
+        print(f"Error: {e}")
