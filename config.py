@@ -22,3 +22,5 @@ DATABASE_SCHEMA = os.getenv("DATABASE_SCHEMA", "public")
 
 FMP_BASE_URL = "https://financialmodelingprep.com/stable"
 RECORD_LIMIT=5
+
+PNG_PATH = os.path.join(PROJECT_ROOT, "graph_png")
