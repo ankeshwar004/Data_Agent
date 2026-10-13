@@ -6,7 +6,7 @@ from Models.schema import DataAgentSchema, QueryExtractionSchema
 from agents.sql_agent import build_sql_graph
 
 from database.coverage import check_requested_coverage
-from database.etl_service import fetch_and_load_financial_data
+from database.etl_service import fetch_and_load_company_profile, fetch_and_load_financial_data
 
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langgraph.graph import StateGraph, START, END
@@ -73,11 +73,6 @@ def next_action_node(state: DataAgentSchema) -> DataAgentSchema:
         state.observations.append("Planning failed: no supported datasets requested.")
         return state
 
-    if not state.required_periods:
-        state.next_action = "fail"
-        state.observations.append("Planning failed: reporting years are missing.")
-        return state
-
     if not state.missing_data:
         state.next_action = "query_database"
         state.observations.append("Plan: required data is available; query PostgreSQL.")
@@ -107,6 +102,14 @@ def etl_node(state: DataAgentSchema) -> DataAgentSchema:
     state.attempts += 1
 
     for dataset, missing_years in state.missing_data.items():
+        if dataset == "companies":
+            result = fetch_and_load_company_profile(ticker=state.ticker)
+            state.observations.append(
+                f"ETL result for {dataset}: {result}"
+                f" ETL attempt: {state.attempts}"
+            )
+            continue
+
         if not missing_years:
             continue
         result = fetch_and_load_financial_data(ticker=state.ticker,dataset=dataset,required_years=missing_years)
@@ -176,6 +179,10 @@ def verify_result_node(state):
     elif not state.final_answer.strip():
         state.verification_passed = False
         state.verification_reason = "SQL executed successfully, but no final answer was generated."
+        
+    elif not state.sql_query_result.strip():
+        state.verification_passed = False
+        state.verification_reason = "SQL executed successfully, but the query result is empty."
 
     else:
         state.verification_passed = True
