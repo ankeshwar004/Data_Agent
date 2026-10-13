@@ -31,11 +31,11 @@ def extract_load_tool(url: str, output_folder: str, output_format: str)->str:
 
 
 @tool
-def financial_etl(ticker: str, datasets: str, years: list[int])->str:
+def financial_etl(ticker: str, dataset: str, required_years: list[int])->dict:
     """
-    Tool function to fetch and load financial data for a given ticker, datasets, and years.
+    Tool function to fetch and load missing financial data for a ticker and years.
     """
-    return fetch_and_load_financial_data(ticker=ticker, datasets=datasets, years=years)
+    return fetch_and_load_financial_data(ticker=ticker, dataset=dataset, required_years=required_years)
 
 
 def llm_node(state: ETLAgentSchema)-> ETLAgentSchema:
