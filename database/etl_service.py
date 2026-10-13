@@ -58,6 +58,29 @@ def ensure_company_profile(fmp_client: FMPClient, ticker: str) -> int:
     return upsert_company(mapped)
 
 
+def fetch_and_load_company_profile(ticker: str) -> dict:
+    """Fetch and load a missing company profile."""
+
+    ticker = ticker.strip().upper()
+    result = {
+        "success": False,
+        "ticker": ticker,
+        "dataset": "companies",
+        "error": None,
+    }
+
+    try:
+        if not ticker:
+            raise ValueError("Ticker cannot be empty.")
+
+        client = FMPClient()
+        ensure_company_profile(client, ticker)
+        result["success"] = True
+        return result
+    except Exception as exc:
+        result["error"] = str(exc)
+        return result
+
 
 def fetch_and_load_financial_data(ticker: str, dataset: str, required_years: list[int]) -> dict:
     """

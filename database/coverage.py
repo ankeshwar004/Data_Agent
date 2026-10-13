@@ -2,14 +2,15 @@
 from database.connection import db_connection
 
 
-# Only allow known table names. Never take table names directly from user input.
 DATASET_TABLES = {
     "income_statement": "income_statements",
     "balance_sheet": "balance_sheets",
     "cash_flow_statement": "cash_flow_statements",
 }
+    
 
-def check_company_coverage(ticker: str) -> bool:
+
+def check_company_profile_coverage(ticker: str) -> dict:
     """
     Check whether PostgreSQL contains a company profile for the given ticker.
     
@@ -36,7 +37,19 @@ def check_company_coverage(ticker: str) -> bool:
             )
             company = cur.fetchone()
 
-    return company is not None
+    return {
+        "ticker": ticker,
+        "dataset": "companies",
+        "required_years": [],
+        "available_years": [],
+        "missing_years": [],
+        "complete": complete,
+        "reason": (
+            "Company profile is present"
+            if complete
+            else "Company profile is missing"
+        ),
+    }
 
 
 
@@ -135,23 +148,26 @@ def check_company_financial_coverage(ticker: str,dataset: str,required_years: li
 
 
 def check_requested_coverage(ticker: str, datasets: list[str], required_years: list[int]) -> dict:
-    """Check whether all requested financial datasets cover all required years."""
+    """Check coverage for requested profile and financial datasets."""
 
     if not  datasets:
         raise ValueError("At least one dataset must be requested.")
 
     datasets = list(dict.fromkeys(datasets))
 
-    unsupported = [dataset for dataset in datasets if dataset not in DATASET_TABLES]
+    supported_datasets = {"companies", *DATASET_TABLES}
+    unsupported = [dataset for dataset in datasets if dataset not in supported_datasets]
     
     if unsupported:
         raise ValueError(f"Unsupported datasets: {unsupported}")
 
     
-    results = {
-        dataset: check_company_financial_coverage(ticker=ticker, dataset=dataset, required_years=required_years)
-        for dataset in datasets
-    }
+    results = {}
+    for dataset in datasets:
+        if dataset == "companies":
+            results[dataset] = check_company_profile_coverage(ticker)
+        else:
+            results[dataset] = check_company_financial_coverage(ticker=ticker, dataset=dataset, required_years=required_years)
 
     all_complete = all(result["complete"] for result in results.values())
 
