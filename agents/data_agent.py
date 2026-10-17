@@ -176,6 +176,9 @@ def sql_node(state: DataAgentSchema) -> DataAgentSchema:
         }
     )
     
+    response = response.model_dump()  
+
+    
     state.generated_sql_query = response.get("generated_sql_query", "")
     state.sql_query_result = response.get("sql_query_result", "")
     state.final_answer = response.get("final_answer", "")
