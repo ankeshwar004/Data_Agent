@@ -9,21 +9,28 @@ import re
 logger = logging.getLogger(__name__)
 
 
+
 class DatabaseUtils:
+
+    # Process-level cache for structural schema metadata (tables, columns, types).
+  
+    _schema_cache = {}
 
     def __init__(self, connection: DatabaseConnection):
         self.connection = connection
 
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
 
-    def schema_details(self,schema_name: str, include_sample_data: bool = True)-> str:
+    def _load_structural_metadata(self, schema_name: str) -> list[dict]:
         """
-        Retrieves the schema details for the specified schema name, including table names, column names, data types,
-        and optionally sample data.
+        Query information_schema once to collect table names, column names,
+        and data types.  Returns a list of table dicts:
+            [{"table_name": ..., "columns": [{"column_name": ..., "data_type": ...}, ...]}, ...]
         """
-        
-        schema_details=[]
-        schema_details.append(f"Database Schema Details for '{schema_name}':")
-        
+        tables_meta: list[dict] = []
+
         with self.connection.pool.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -35,51 +42,77 @@ class DatabaseUtils:
                     """,
                     (schema_name,),
                 )
-                tables=cur.fetchall()
-                
+                tables = cur.fetchall()
+
                 for table in tables:
                     table_name = table["table_name"]
-                    schema_details.append(f"Table: {table_name}")
-                    
                     cur.execute(
                         """
                         SELECT column_name, data_type
                         FROM information_schema.columns
-                        WHERE table_schema = %s and table_name = %s
+                        WHERE table_schema = %s AND table_name = %s
                         ORDER BY ordinal_position;
-                        """, 
-                        (schema_name, table_name)
+                        """,
+                        (schema_name, table_name),
                     )
-                    
-                    details=cur.fetchall()
-                    
-                    for detail in details:
-                        column = detail["column_name"]
-                        data_type = detail["data_type"]
-                        schema_details.append(f"  Column: {column}, Data Type: {data_type}")
-                        
-                    query=sql.SQL("SELECT COUNT(*) FROM {}.{};").format(
-                        sql.Identifier(schema_name),
-                        sql.Identifier(table_name)
+                    columns = cur.fetchall()
+                    tables_meta.append(
+                        {"table_name": table_name, "columns": columns}
                     )
-                    
-                    cur.execute(query)
-                    schema_details.append(f" Total Rows: {cur.fetchone()['count']}")
-                    
+
+        return tables_meta
+
+
+    def _get_structural_metadata(self, schema_name: str) -> list[dict]:
+        """Return cached structural metadata, fetching it on the first call."""
+        
+        if schema_name not in DatabaseUtils._schema_cache:
+            logger.info("Caching structural schema metadata for '%s'.", schema_name)
+            
+            DatabaseUtils._schema_cache[schema_name] = self._load_structural_metadata(schema_name)
+        return DatabaseUtils._schema_cache[schema_name]
+ 
+ 
+ 
+    def schema_details(self, schema_name: str, include_sample_data: bool = True) -> str:
+        """
+        Retrieves the schema details for the specified schema name.
+        Structural metadata (table names, column names, data types) is cached per process so it is only queried once. 
+        Row counts and  sample rows are fetched only when *include_sample_data* is True.
+        """
+
+        tables_meta = self._get_structural_metadata(schema_name)
+
+        output= [f"Database Schema Details for '{schema_name}':"]
+
+        with self.connection.pool.connection() as conn:
+            with conn.cursor() as cur:
+                for table_info in tables_meta:
+                    table_name = table_info["table_name"]
+                    output.append(f"Table: {table_name}")
+
+                    for col in table_info["columns"]:
+                        output.append(f"  Column: {col['column_name']}, Data Type: {col['data_type']}")
+
                     if include_sample_data:
-                                            
-                        sample_query=sql.SQL("SELECT * FROM {}.{} LIMIT 2;").format(
+                        count_query = sql.SQL("SELECT COUNT(*) FROM {}.{};").format(
                             sql.Identifier(schema_name),
-                            sql.Identifier(table_name)
+                            sql.Identifier(table_name),
                         )
-                        
+                        cur.execute(count_query)
+                        output.append(f" Total Rows: {cur.fetchone()['count']}")
+
+                        sample_query = sql.SQL(
+                            "SELECT * FROM {}.{} LIMIT 2;"
+                        ).format(
+                            sql.Identifier(schema_name),
+                            sql.Identifier(table_name),
+                        )
                         cur.execute(sample_query)
-                        
                         for row in cur.fetchall():
-                            schema_details.append(f" Sample Row: {row}")
-                    
-                    
-        return "\n".join(schema_details)
+                            output.append(f" Sample Row: {row}")
+
+        return "\n".join(output)
     
     
     
@@ -102,7 +135,9 @@ class DatabaseUtils:
                     cur.execute(query)
 
                     if cur.description:           # if the query returns rows (e.g., SELECT), fetch and return them
-                        result = cur.fetchall()
+                        result = cur.fetchmany(200)
+                        if cur.fetchone() is not None:
+                            logger.warning("SQL query result truncated to 200 rows.")
                         logger.info("SQL query completed successfully.")
                         return True, result
 
