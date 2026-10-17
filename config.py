@@ -26,3 +26,4 @@ RECORD_LIMIT=5
 PNG_PATH = os.path.join(PROJECT_ROOT, "graph_png")
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL","nvidia/nemotron-3-ultra-550b-a55b:free")
