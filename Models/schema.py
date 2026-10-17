@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pydantic import BaseModel, Field
 from typing import Literal
 
@@ -31,6 +33,11 @@ class JudgeSchema(BaseModel):
 
 class ETLAgentSchema(BaseModel):
     messages: list = Field(default_factory=list, description="List of messages to be processed by the agent")
+    ticker: str = Field(default="", description="Ticker symbol for the ETL task")
+    dataset: str = Field(default="", description="Dataset to fetch and load")
+    required_years: list[int] = Field(default_factory=list, description="Fiscal years to fetch")
+    result: dict = Field(default_factory=dict, description="Structured result of the ETL task")
+    outcome: ETLLoadOutcome | None = Field(default=None, description="Normalized ETL task outcome")
 
 
 class DataAgentSchema(BaseModel):

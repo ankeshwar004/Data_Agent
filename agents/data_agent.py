@@ -3,10 +3,10 @@ import config
 from utils.llm_picker import get_llm
 from utils.prompts import extract_query_entities_prompt
 from Models.schema import DataAgentSchema, QueryExtractionSchema
+from agents.etl_agent import build_etl_graph
 from agents.sql_agent import build_sql_graph
 
 from database.coverage import check_requested_coverage
-from database.etl_service import fetch_and_load_company_profile, fetch_and_load_financial_data
 
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langgraph.graph import StateGraph, START, END
@@ -102,7 +102,7 @@ def next_action_node(state: DataAgentSchema) -> DataAgentSchema:
 
 def etl_node(state: DataAgentSchema) -> DataAgentSchema:
     """
-    Fetch missing financial data using deterministic ETL.
+    Fetch missing financial data through the ETL specialist subgraph.
     """
 
     if state.attempts >= state.max_attempts:
@@ -111,22 +111,24 @@ def etl_node(state: DataAgentSchema) -> DataAgentSchema:
         return state
     
     state.attempts += 1
+    etl_graph = build_etl_graph()
 
     for dataset, missing_years in state.missing_data.items():
-        if dataset == "companies":
-            result = fetch_and_load_company_profile(ticker=state.ticker)
-            state.observations.append(
-                f"ETL result for {dataset}: {result}"
-                f" ETL attempt: {state.attempts}"
-            )
+        if dataset != "companies" and not missing_years:
             continue
-
-        if not missing_years:
-            continue
-        result = fetch_and_load_financial_data(ticker=state.ticker,dataset=dataset,required_years=missing_years)
+        response = etl_graph.invoke(
+            {
+                "ticker": state.ticker,
+                "dataset": dataset,
+                "required_years": missing_years,
+            }
+        )
+        response = response.model_dump() 
+        outcome = response.get("outcome", None)
+        result =  response.get("result", None)
 
         state.observations.append(
-            f"ETL result for {dataset}: {result}"
+            f"ETL result for {dataset}: {result}; outcome={outcome}"
             f" ETL attempt: {state.attempts}"
         )
 

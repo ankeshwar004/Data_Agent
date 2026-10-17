@@ -4,8 +4,8 @@ import config
 from utils.llm_picker import get_llm
 from utils.etl_tools import ETLTools
 from utils.prompts import etl_prompt
-from Models.schema import ETLAgentSchema
-from database.etl_service import fetch_and_load_financial_data
+from Models.schema import ETLAgentSchema, ETLLoadOutcome
+from database.etl_service import fetch_and_load_company_profile, fetch_and_load_financial_data
 
 from langchain_core.messages import ToolMessage
 from langgraph.graph import StateGraph, START, END
@@ -34,8 +34,66 @@ def extract_load_tool(url: str, output_folder: str, output_format: str)->str:
 def financial_etl(ticker: str, dataset: str, required_years: list[int])->dict:
     """
     Tool function to fetch and load missing financial data for a ticker and years.
+    Args:
+        ticker (str): The stock ticker symbol.
+        dataset (str): The dataset to fetch and load (e.g., 'income-statement', 'balance-sheet', 'cash-flow').
+        required_years (list[int]): The list of years for which data is required.
+    Returns:
+        dict: A dictionary containing the status of the operation, loaded years, missing years, and any error messages.
     """
     return fetch_and_load_financial_data(ticker=ticker, dataset=dataset, required_years=required_years)
+
+
+@tool
+def company_profile_etl(ticker: str) -> dict:
+    """
+    Fetch and load a company profile.
+    """
+    return fetch_and_load_company_profile(ticker=ticker)
+
+
+def execute_task_node(state: ETLAgentSchema) -> ETLAgentSchema:
+    """
+    Execute a structured ETL task using the deterministic service layer.
+    """
+    
+    if state.dataset == "companies":
+        result = company_profile_etl.invoke({"ticker": state.ticker})
+    else:
+        result = financial_etl.invoke(
+            {
+                "ticker": state.ticker,
+                "dataset": state.dataset,
+                "required_years": state.required_years,
+            }
+        )
+
+    requested_years = state.required_years
+    loaded_years = (
+        requested_years
+        if result["success"] and state.dataset == "companies"
+        else [year for year in requested_years if year not in result.get("missing_years", requested_years)]
+    )
+    
+    if result["success"]:
+        status = "SUCCESS"
+    elif loaded_years:
+        status = "PARTIAL"
+    elif result.get("error"):
+        status = "FAILED"
+    else:
+        status = "UNAVAILABLE"
+
+    state.result = result
+    state.outcome = ETLLoadOutcome(
+        ticker=state.ticker,
+        dataset=state.dataset,
+        status=status,
+        loaded_years=loaded_years,
+        missing_years=result.get("missing_years", []),
+        error_message=result.get("error"),
+    )
+    return state
 
 
 def llm_node(state: ETLAgentSchema)-> ETLAgentSchema:
@@ -47,7 +105,7 @@ def llm_node(state: ETLAgentSchema)-> ETLAgentSchema:
     messages = state.messages
     
     llm=get_llm("low")
-    tools = [extract_load_tool, financial_etl]
+    tools = [extract_load_tool, financial_etl, company_profile_etl]
     chain = etl_prompt | llm.bind_tools(tools)
     response = chain.invoke({ "messages": messages })
     
@@ -61,7 +119,7 @@ def tool_node(state: ETLAgentSchema)-> ETLAgentSchema:
     This node is responsible for invoking the appropriate tool based on the user's question and the context provided by the LLM.
     """
     
-    tool_kits = [extract_load_tool, financial_etl]
+    tool_kits = [extract_load_tool, financial_etl, company_profile_etl]
     tools_result = []
     tool_by_name = {tool.name: tool for tool in tool_kits}
     
@@ -89,6 +147,7 @@ def build_etl_graph():
     
     graph = StateGraph(ETLAgentSchema)
     
+    graph.add_node("execute_task", execute_task_node)
     graph.add_node("llm_node", llm_node)
     graph.add_node("tool_node", tool_node)
     
@@ -99,7 +158,18 @@ def build_etl_graph():
             return "tool_node"
         return "end"
     
-    graph.add_edge(START, "llm_node")
+    def choose_entry(state: ETLAgentSchema):
+        return "execute_task" if state.ticker and state.dataset else "llm_node"
+
+    graph.add_conditional_edges(
+        START,
+        choose_entry,
+        {
+            "execute_task": "execute_task",
+            "llm_node": "llm_node",
+        },
+    )
+    graph.add_edge("execute_task", END)
     graph.add_conditional_edges(
         "llm_node",is_tool_call,
         {

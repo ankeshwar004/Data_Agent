@@ -1,5 +1,5 @@
 from Models.schema import DataAgentSchema
-from agents.data_agent import next_action_node
+from agents.data_agent import etl_node, next_action_node
 
 
 def test_etl_stops_when_retry_limit_is_reached():
@@ -38,3 +38,41 @@ def test_etl_is_attempted_when_retries_remain():
     result = next_action_node(state)
 
     assert result.next_action == "fetch_missing_data"
+
+
+def test_etl_node_invokes_the_etl_subgraph(monkeypatch):
+    calls = []
+
+    class FakeETLGraph:
+        def invoke(self, task):
+            calls.append(task)
+            return {
+                "result": {
+                    "success": True,
+                    "missing_years": [],
+                },
+                "outcome": {
+                    "status": "SUCCESS",
+                },
+            }
+
+    monkeypatch.setattr(
+        "agents.data_agent.build_etl_graph",
+        lambda: FakeETLGraph(),
+    )
+
+    state = DataAgentSchema(
+        ticker="AAPL",
+        missing_data={"income_statement": [2024]},
+    )
+
+    result = etl_node(state)
+
+    assert calls == [
+        {
+            "ticker": "AAPL",
+            "dataset": "income_statement",
+            "required_years": [2024],
+        }
+    ]
+    assert "ETL result for income_statement" in result.observations[0]
