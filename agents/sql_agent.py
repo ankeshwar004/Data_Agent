@@ -17,6 +17,11 @@ from langgraph.graph import END, START, StateGraph
 
 logger = logging.getLogger(__name__)
 
+# Ablation flag: when True, schema sample data is suppressed even on the
+# first attempt.  The eval/ablation.py harness flips this between runs.
+# Normal operation: leave False (sample data included on first attempt only).
+ABLATION_FORCE_NO_SAMPLES: bool = False
+
 
 def curate_ques(state:AgentSchema)-> AgentSchema:
     """
@@ -42,10 +47,17 @@ def generate_sql_query(state: AgentSchema)-> AgentSchema:
     """
     
     curated_ques=state.curated_ques
-    logger.info("Generating SQL query.")
+    is_retry = bool(state.prompt_query_context)
+    logger.info("Generating SQL query (retry=%s).", is_retry)
     
     database_obj = DatabaseUtils(db_connection)
-    schema_details = database_obj.schema_details(config.DATABASE_SCHEMA, include_sample_data=True)
+    # First attempt: include sample data for context.
+    # Retries: structural metadata only (cached), the retry context
+    # already carries the error / feedback from the previous attempt.
+    # Ablation: ABLATION_FORCE_NO_SAMPLES suppresses samples on all attempts.
+    
+    include_samples = not is_retry and not ABLATION_FORCE_NO_SAMPLES
+    schema_details = database_obj.schema_details(config.DATABASE_SCHEMA, include_sample_data=include_samples)
     
     llm=get_llm("low")
     
@@ -90,6 +102,7 @@ def canceled_sql_query(state: AgentSchema)-> AgentSchema:
     
     comments=state.comments
     state.sql_execution_success = False
+    state.sql_execution_error = f"Safety judge rejected the query: {comments}"
     state.final_answer=f"SQL Query is not safe to execute. Comments: {comments}"
     state.messages=state.messages + [AIMessage(content=f"{state.final_answer}")]
     
