@@ -9,8 +9,12 @@ The application:
 1. Extracts the ticker, datasets, and requested years from a question.
 2. Checks whether the requested data is already in PostgreSQL.
 3. Fetches missing data from FMP and upserts it into the database.
-4. Generates and executes a read-only SQL query.
-5. Returns a natural language answer.
+4. Generates a SQL query and checks it with a safety judge.
+5. Executes the approved query in a read-only transaction.
+6. Verifies the result and returns a natural language answer.
+
+The workflow retries failed ETL and SQL steps within bounded retry budgets. The
+ETL layer only loads annual `FY` records for the requested fiscal years.
 
 ## Requirements
 
@@ -76,6 +80,8 @@ DB_PASSWORD=postgres
 
 The current low-level agent uses OpenRouter, so `OPENROUTER_API_KEY` is
 required. `OPENAI_API_KEY` is not required by the current configuration.
+Set `OPENROUTER_MODEL` to override the default model
+(`nvidia/nemotron-3-ultra-550b-a55b:free`).
 
 Verify that the application can load the credentials without printing them:
 
@@ -149,23 +155,55 @@ requested years.
 │   ├── etl_agent.py        # Tool-based ETL graph
 │   └── sql_agent.py        # Safe SQL and answer generation graph
 ├── database/
+│   ├── connection.py       # PostgreSQL connection pool lifecycle
 │   ├── coverage.py         # Checks available financial data
+│   ├── database.py         # Schema inspection and SQL execution
 │   ├── etl_service.py      # Fetches and loads missing FMP data
 │   ├── financial_repository.py
+│   ├── loader.py           # Database loading helpers
+│   ├── mapper.py           # FMP-to-database mappings
+│   ├── queries.py           # Database queries
 │   ├── schema.sql
 │   └── seed.py
 ├── Models/schema.py         # Pydantic graph state models
 ├── utils/
+│   ├── etl_tools.py         # Generic extraction and load tools
 │   ├── llm_picker.py        # OpenRouter model selection
-│   └── prompts.py
+│   └── prompts.py           # Agent prompts
 ├── fmp_client.py            # FMP API client
 ├── config.py                # Environment and application settings
-└── main.py                  # CLI entry point
+├── main.py                  # CLI entry point
+├── graph_png/               # Generated workflow diagrams
+└── tests/                   # Unit tests for agents and database services
 ```
 
-## Validation
+## Architecture
 
-Compile the main application modules:
+The application is composed of three LangGraph workflows:
+
+- **Data agent**: extracts request details, checks database coverage, routes
+  missing data through ETL, and coordinates SQL retries and result
+  verification.
+- **ETL agent**: provides tool-based extraction and financial-data loading.
+- **SQL agent**: curates the question, generates SQL from the database schema,
+  checks query safety, executes approved read-only queries, and formats the
+  answer.
+
+Workflow diagrams are available in [`graph_png/`](graph_png/):
+
+- [`data_agent_graph.png`](graph_png/data_agent_graph.png)
+- [`etl_agent_graph.png`](graph_png/etl_agent_graph.png)
+- [`sql_agent_graph.png`](graph_png/sql_agent_graph.png)
+
+## Test and validate
+
+Run the unit tests:
+
+```bash
+venv/bin/python -m pytest tests/
+```
+
+Compile the application modules:
 
 ```bash
 venv/bin/python -m py_compile \
@@ -176,9 +214,9 @@ venv/bin/python -m py_compile \
   agents/data_agent.py
 ```
 
-The FMP client and ETL flow can be tested with a fake HTTP session so no real
-API request or database write is made. Keep API keys and database credentials
-out of test output and source control.
+The tests use fakes and mocks for external services where appropriate. Tests
+that exercise PostgreSQL require a configured database. Keep API keys and
+database credentials out of test output and source control.
 
 ## Troubleshooting
 
