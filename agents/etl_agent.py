@@ -1,5 +1,6 @@
 import os
 import config
+import json
 
 from utils.llm_picker import get_llm
 from utils.etl_tools import ETLTools
@@ -132,7 +133,7 @@ def tool_node(state: ETLAgentSchema)-> ETLAgentSchema:
         observation = selected_tool.invoke(tool_call["args"])
         
         tools_result.append(
-            ToolMessage(content=observation, tool_call_id=tool_call["id"])
+            ToolMessage(content=json.dumps(observation, default=str), tool_call_id=tool_call["id"])
         )
     
     state.messages=state.messages + tools_result
