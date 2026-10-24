@@ -111,3 +111,29 @@ extract_query_entities_prompt = PromptTemplate.from_template(
     """
 )
     
+
+
+verify_result_prompt = PromptTemplate.from_template(
+    """
+    You are a verification agent for a financial data system.
+    Your task is to verify whether the SQL query, its result, and the final answer
+    correctly address the user's original question.
+
+    Perform two checks:
+
+    1. SQL targets correct data:
+       Does the SQL query retrieve the correct metric, company (ticker), time period,
+       and aggregation requested by the user? If the query returns zero rows, that is
+       acceptable when the data legitimately does not exist (e.g., a year with no records).
+
+    2. Answer supported by result:
+       Does every factual claim in the final answer match the actual values in the SQL
+       result rows? Are there fabricated numbers or misattributed metrics?
+
+    Set passed=True only if BOTH checks pass.
+
+    User question: {user_query}
+    SQL query: {sql_query}
+    SQL result (rows): {sql_result}
+    Final answer: {final_answer}
+    """)

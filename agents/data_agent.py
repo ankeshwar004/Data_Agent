@@ -1,8 +1,9 @@
 import os
+import logging
 import config
 from utils.llm_picker import get_llm
-from utils.prompts import extract_query_entities_prompt
-from Models.schema import DataAgentSchema, QueryExtractionSchema
+from utils.prompts import extract_query_entities_prompt, verify_result_prompt
+from Models.schema import DataAgentSchema, QueryExtractionSchema, VerificationSchema
 from agents.etl_agent import build_etl_graph
 from agents.sql_agent import build_sql_graph
 
@@ -12,6 +13,8 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langgraph.graph import StateGraph, START, END
 from langchain.tools import tool
 
+
+logger = logging.getLogger(__name__)
 
 
 def extract_query_entities(state: DataAgentSchema) -> DataAgentSchema:
@@ -161,7 +164,7 @@ def sql_node(state: DataAgentSchema) -> DataAgentSchema:
     # Reset the previous attempt's status.
     state.sql_execution_success = False
     state.sql_error = None
-    state.sql_query_result = ""
+    state.sql_query_result = []
     state.generated_sql_query = ""
     state.final_answer = ""
     state.verification_passed = False
@@ -182,7 +185,7 @@ def sql_node(state: DataAgentSchema) -> DataAgentSchema:
 
     
     state.generated_sql_query = response.get("generated_sql_query", "")
-    state.sql_query_result = response.get("sql_query_result", "")
+    state.sql_query_result = response.get("sql_query_result", [])
     state.final_answer = response.get("final_answer", "")
     
     state.sql_execution_success = response.get("sql_execution_success", False)
@@ -201,30 +204,56 @@ def sql_node(state: DataAgentSchema) -> DataAgentSchema:
 
 
 
-def verify_result_node(state):
+def verify_result_node(state: DataAgentSchema) -> DataAgentSchema:
     """
-    Verifies the result of the SQL query execution and determines the next action based on the verification outcome.
+    Two-stage verification of SQL execution, query correctness, and answer accuracy.
+
+    Stage 1 (deterministic): check execution status and whether an answer exists.
+    Stage 2 (LLM): verify the SQL targets the right data and the answer is supported
+    by the result rows.
     """
+
+    # --- Stage 1: execution-level checks ---
     if not state.sql_execution_success:
         state.verification_passed = False
-        state.verification_reason = state.sql_error
+        state.verification_reason = f"SQL execution failed: {state.sql_error}"
+        return _route_after_verification(state)
 
-    elif not state.final_answer.strip():
+    if not state.final_answer.strip():
         state.verification_passed = False
         state.verification_reason = "SQL executed successfully, but no final answer was generated."
-        
-    elif not state.sql_query_result.strip():
-        state.verification_passed = False
-        state.verification_reason = "SQL executed successfully, but the query result is empty."
+        return _route_after_verification(state)
 
-    else:
+    # Empty result is legitimate (e.g. year with no records) — don't auto-retry.
+    # Let the LLM verifier decide if the query was correct.
+
+    # --- Stage 2: LLM-based answer verification ---
+    try:
+        llm = get_llm("low").with_structured_output(VerificationSchema)
+        chain = verify_result_prompt | llm
+        verdict: VerificationSchema = chain.invoke({
+            "user_query": state.user_query,
+            "sql_query": state.generated_sql_query,
+            "sql_result": str(state.sql_query_result),
+            "final_answer": state.final_answer,
+        })
+
+        state.verification_passed = verdict.passed
+        state.verification_reason = verdict.reason
+    except Exception as e:
+        # If the verifier itself fails, fall back to pass so we don't block
+        # on a transient LLM error — the answer already exists.
+        logger.warning("Answer verifier failed (%s); accepting result.", e)
         state.verification_passed = True
-        state.verification_reason = "SQL execution succeeded and a final answer was generated."
+        state.verification_reason = f"Verifier error (accepted by default): {e}"
 
+    return _route_after_verification(state)
+
+
+def _route_after_verification(state: DataAgentSchema) -> DataAgentSchema:
+    """Shared routing logic after verification decision is made."""
     state.observations.append(
-        f"Verification passed: {state.verification_reason}"
-        if state.verification_passed
-        else f"Verification failed: {state.verification_reason}"
+        f"Verification {'passed' if state.verification_passed else 'failed'}: {state.verification_reason}"
     )
 
     if state.verification_passed:

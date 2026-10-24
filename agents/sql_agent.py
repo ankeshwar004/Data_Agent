@@ -121,12 +121,12 @@ def execute_sql_query(state: AgentSchema)-> AgentSchema:
     success,result = database_obj.execute_sql_query(sql_query)
     
     if success:
-        state.sql_query_result=str(result)
+        state.sql_query_result = result  # preserve list[dict] or str as-is
         state.sql_execution_success = True
         state.sql_execution_error = None
         
     else:
-        state.sql_query_result=""
+        state.sql_query_result = []
         state.sql_execution_success = False
         state.sql_execution_error = result  # Store the error message in the state
         
@@ -144,7 +144,7 @@ def generate_final_answer(state: AgentSchema)-> AgentSchema:
     llm=get_llm("low")
         
     response_chain = final_answer_prompt | llm | StrOutputParser()
-    response = response_chain.invoke({ "curated_ques": curated_ques, "query_result": sql_query_result })
+    response = response_chain.invoke({ "curated_ques": curated_ques, "query_result": str(sql_query_result) })
     
     state.final_answer=response
     state.messages=state.messages + [AIMessage(content=f"{response}")]
