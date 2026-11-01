@@ -1,0 +1,146 @@
+{
+  "version": 1,
+  "tolerance": 0.01,
+  "cases": [
+    {
+      "id": "exists-aapl-revenue-2024",
+      "group": "data_exists",
+      "question": "What was Apple's revenue in 2024?",
+      "ticker": "AAPL",
+      "year": 2024,
+      "metric": "revenue",
+      "value": 391035000000
+    },
+    {
+      "id": "exists-msft-revenue-2023",
+      "group": "data_exists",
+      "question": "Show Microsoft's revenue for 2023.",
+      "ticker": "MSFT",
+      "year": 2023,
+      "metric": "revenue",
+      "value": 211915000000
+    },
+    {
+      "id": "exists-googl-net-income-2024",
+      "group": "data_exists",
+      "question": "What was Alphabet's net income in fiscal 2024?",
+      "ticker": "GOOGL",
+      "year": 2024,
+      "metric": "net_income",
+      "value": 100118000000
+    },
+    {
+      "id": "exists-amzn-assets-2024",
+      "group": "data_exists",
+      "question": "What were Amazon's total assets in 2024?",
+      "ticker": "AMZN",
+      "year": 2024,
+      "metric": "total_assets",
+      "value": 624316000000
+    },
+    {
+      "id": "exists-tsla-cashflow-2023",
+      "group": "data_exists",
+      "question": "What was Tesla's operating cash flow in 2023?",
+      "ticker": "TSLA",
+      "year": 2023,
+      "metric": "operating_cash_flow",
+      "value": 13256000000
+    },
+    {
+      "id": "missing-aapl-revenue-2023",
+      "group": "data_missing",
+      "question": "What was Apple's revenue in 2023?",
+      "ticker": "AAPL",
+      "year": 2023,
+      "metric": "revenue",
+      "value": 383285000000,
+      "fmp_record": {"period": "FY", "fiscalYear": "2023", "revenue": 383285000000}
+    },
+    {
+      "id": "missing-msft-revenue-2022",
+      "group": "data_missing",
+      "question": "Show Microsoft's revenue for 2022.",
+      "ticker": "MSFT",
+      "year": 2022,
+      "metric": "revenue",
+      "value": 198270000000,
+      "fmp_record": {"period": "FY", "fiscalYear": "2022", "revenue": 198270000000}
+    },
+    {
+      "id": "missing-googl-income-2023",
+      "group": "data_missing",
+      "question": "What was Alphabet's net income in 2023?",
+      "ticker": "GOOGL",
+      "year": 2023,
+      "metric": "net_income",
+      "value": 73795000000,
+      "fmp_record": {"period": "FY", "fiscalYear": "2023", "net_income": 73795000000}
+    },
+    {
+      "id": "missing-amzn-assets-2023",
+      "group": "data_missing",
+      "question": "What were Amazon's total assets in 2023?",
+      "ticker": "AMZN",
+      "year": 2023,
+      "metric": "total_assets",
+      "value": 527854000000,
+      "fmp_record": {"period": "FY", "fiscalYear": "2023", "total_assets": 527854000000}
+    },
+    {
+      "id": "missing-tsla-cashflow-2022",
+      "group": "data_missing",
+      "question": "What was Tesla's operating cash flow in 2022?",
+      "ticker": "TSLA",
+      "year": 2022,
+      "metric": "operating_cash_flow",
+      "value": 14724000000,
+      "fmp_record": {"period": "FY", "fiscalYear": "2022", "operating_cash_flow": 14724000000}
+    },
+    {
+      "id": "failure-aapl-timeout",
+      "group": "failure",
+      "question": "Retrieve Apple's revenue for 2022.",
+      "ticker": "AAPL",
+      "year": 2022,
+      "metric": "revenue",
+      "failure": "timeout"
+    },
+    {
+      "id": "failure-msft-invalid-response",
+      "group": "failure",
+      "question": "Retrieve Microsoft's revenue for 2021.",
+      "ticker": "MSFT",
+      "year": 2021,
+      "metric": "revenue",
+      "failure": "invalid_response"
+    },
+    {
+      "id": "failure-googl-empty-response",
+      "group": "failure",
+      "question": "Retrieve Alphabet's net income for 2022.",
+      "ticker": "GOOGL",
+      "year": 2022,
+      "metric": "net_income",
+      "failure": "empty_response"
+    },
+    {
+      "id": "failure-amzn-load-error",
+      "group": "failure",
+      "question": "Retrieve Amazon's total assets for 2022.",
+      "ticker": "AMZN",
+      "year": 2022,
+      "metric": "total_assets",
+      "failure": "load_error"
+    },
+    {
+      "id": "failure-tsla-sql-error",
+      "group": "failure",
+      "question": "Retrieve Tesla's operating cash flow for 2021.",
+      "ticker": "TSLA",
+      "year": 2021,
+      "metric": "operating_cash_flow",
+      "failure": "sql_error"
+    }
+  ]
+}
