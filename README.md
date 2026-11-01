@@ -174,6 +174,12 @@ requested years.
 ├── config.py                # Environment and application settings
 ├── main.py                  # CLI entry point
 ├── graph_png/               # Generated workflow diagrams
+├── eval/
+│   ├── cases.json           # Fixed evaluation questions and expected values
+│   ├── cases.py             # Dataset loading and report scoring
+│   ├── offline.py           # Deterministic fixture evaluation
+│   ├── live.py              # PostgreSQL/FMP/LLM evaluation
+│   └── run_eval.py          # CLI entry point
 └── tests/                   # Unit tests for agents and database services
 ```
 
@@ -217,6 +223,68 @@ venv/bin/python -m py_compile \
 The tests use fakes and mocks for external services where appropriate. Tests
 that exercise PostgreSQL require a configured database. Keep API keys and
 database credentials out of test output and source control.
+
+### Run the deterministic end-to-end evaluation
+
+The evaluation harness uses fixed fixtures and an in-memory
+PostgreSQL-shaped store. It does not require PostgreSQL, FMP credentials, or
+an LLM:
+
+```bash
+python -m eval.run_eval
+python -m eval.run_eval --json
+```
+
+The 45 cases cover 15 data-present cases, 15 missing-data cases, and 15
+injected-failure cases. The 15 records in
+[`eval/cases.json`](eval/cases.json) are repeated across three deterministic
+runs so the fixture set remains reviewable. A financial task passes only when
+the expected value is returned from an executed query; missing-data cases also
+require the record to be loaded. Failure cases pass only when bounded retries
+terminate with an explicit error and no value is invented.
+
+The report separates task completion success rate from failure handling rate
+and reports the autonomous workflow's change in percentage points against the
+simpler one-attempt baseline.
+
+Offline reports also include SQL first-attempt and final execution success
+rates, plus ETL complete-request success and correctly loaded-record counts.
+SQL execution denominators include only cases that reached SQL generation;
+FMP/ETL failures that terminate before SQL are not misclassified as SQL
+failures.
+
+### Run against live services
+
+Use a dedicated PostgreSQL database for evaluation. The live mode never
+defaults to the application's normal `DATABASE_URL` and refuses to start
+unless all three service credentials are present:
+
+```env
+EVAL_DATABASE_URL=postgresql://user:password@localhost:5432/data_agent_eval
+FMP_API_KEY=your_fmp_api_key
+OPENROUTER_API_KEY=your_openrouter_api_key
+OPENROUTER_MODEL=your_model
+```
+
+Then run:
+
+```bash
+python -m eval.run_eval --live --json
+```
+
+Live evaluation runs the 15 unique fixture questions through the production
+graph and verifies the requested
+fiscal record with an independent read-only SQL query. It checks initial and
+post-run coverage, the agent's executed query result, final completion, and
+the expected value. Failure cases are reported as skipped because simulating
+timeouts or database faults against live services would require a fault
+injection proxy; they are not silently counted as passed.
+
+The live report includes `sql_execution.first_attempt_success_rate`,
+`sql_execution.final_execution_success_rate`,
+`etl_coverage.complete_request_success_rate`, and
+`etl_coverage.records_loaded_correctly`. These metrics are based on the
+production graph's per-attempt state, not inferred from the final answer.
 
 ## Troubleshooting
 
