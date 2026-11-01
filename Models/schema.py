@@ -71,6 +71,9 @@ class DataAgentSchema(BaseModel):
     
     sql_execution_success: bool = Field(default=False, description="Indicates whether the execution of the SQL Query was successful or not")
     sql_error: str | None = None
+    sql_attempt_results: list[bool] = Field(default_factory=list,description="Execution result for each SQL attempt, in order.")
+    
+    etl_attempt_results: list[dict] = Field(default_factory=list,description="Structured result for each ETL attempt.")
 
     verification_passed: bool = Field(default=False, description="Indicates whether the verification of the SQL query result passed or failed")
     verification_reason: str = Field(default="", description="Reason for the verification result")

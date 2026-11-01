@@ -126,13 +126,25 @@ def etl_node(state: DataAgentSchema) -> DataAgentSchema:
                 "required_years": missing_years,
             }
         )
-        response = response.model_dump() 
+        response = (
+            response.model_dump()
+            if hasattr(response, "model_dump")
+            else response
+        )
         outcome = response.get("outcome", None)
         result =  response.get("result", None)
 
         state.observations.append(
             f"ETL result for {dataset}: {result}; outcome={outcome}"
             f" ETL attempt: {state.attempts}"
+        )
+        state.etl_attempt_results.append(
+            {
+                "dataset": dataset,
+                "attempt": state.attempts,
+                "result": result,
+                "outcome": outcome,
+            }
         )
 
     state.next_action = "inspect_data"
@@ -190,6 +202,7 @@ def sql_node(state: DataAgentSchema) -> DataAgentSchema:
     
     state.sql_execution_success = response.get("sql_execution_success", False)
     state.sql_error = response.get("sql_execution_error","")
+    state.sql_attempt_results.append(state.sql_execution_success)
     
     state.messages = state.messages + response.get("messages", [])
     
@@ -224,8 +237,6 @@ def verify_result_node(state: DataAgentSchema) -> DataAgentSchema:
         state.verification_reason = "SQL executed successfully, but no final answer was generated."
         return _route_after_verification(state)
 
-    # Empty result is legitimate (e.g. year with no records) — don't auto-retry.
-    # Let the LLM verifier decide if the query was correct.
 
     # --- Stage 2: LLM-based answer verification ---
     try:
