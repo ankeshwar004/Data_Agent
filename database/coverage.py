@@ -2,11 +2,7 @@
 from database.connection import db_connection
 
 
-DATASET_TABLES = {
-    "income_statement": "income_statements",
-    "balance_sheet": "balance_sheets",
-    "cash_flow_statement": "cash_flow_statements",
-}
+from database.database_config import DATASET_TABLES
     
 
 

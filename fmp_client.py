@@ -1,7 +1,7 @@
 import os
 import requests
 import config
-
+from typing import Any
 
 
 class FMPClient:
@@ -16,8 +16,7 @@ class FMPClient:
 
         self.session = requests.Session()
 
-    def fetch(self, endpoint: str, ticker: str, limit: int = 5):
-        
+    def fetch(self, endpoint: str, ticker: str, limit: int = 5) -> list[dict[str, Any]]:
         """
         Fetches data from the Financial Modeling Prep API for a given endpoint and ticker.
         

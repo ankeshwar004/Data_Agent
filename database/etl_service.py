@@ -3,40 +3,12 @@ import config
 from datetime import date
 
 from fmp_client import FMPClient
+
 from database.connection import db_connection
 from database.coverage import check_company_financial_coverage
-
-from database.mapper import (
-    map_company_profile,
-    map_income_statement,
-    map_balance_sheet,
-    map_cash_flow_statement,
-)
-
-from database.financial_repository import (
-    upsert_company,
-    upsert_income_statement,
-    upsert_balance_sheet,
-    upsert_cash_flow_statement,
-)
-
-DATASETS_CONFIG = {
-    "income_statement": {
-        "endpoint": "income-statement",
-        "mapper": map_income_statement,
-        "upsert": upsert_income_statement,
-    },
-    "balance_sheet": {
-        "endpoint": "balance-sheet-statement",
-        "mapper": map_balance_sheet,
-        "upsert": upsert_balance_sheet,
-    },
-    "cash_flow_statement": {
-        "endpoint": "cash-flow-statement",
-        "mapper": map_cash_flow_statement,
-        "upsert": upsert_cash_flow_statement,
-    },
-}
+from database.mapper import map_company_profile
+from database.financial_repository import upsert_company
+from database.database_config import DATASETS_CONFIG
 
 
 def ensure_company_profile(fmp_client: FMPClient, ticker: str) -> int:
