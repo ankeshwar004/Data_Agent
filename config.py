@@ -27,3 +27,15 @@ PNG_PATH = os.path.join(PROJECT_ROOT, "graph_png")
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL","nvidia/nemotron-3-ultra-550b-a55b:free")
+
+
+FIXTURE_DIR = PROJECT_ROOT / "eval/datasets/fixtures/fmp"
+OUTPUT_DIR = PROJECT_ROOT / "eval/datasets/generated"
+
+question_generation_prompt = PROJECT_ROOT / "evals/dataset_generator/prompts/question_generation..md"
+validation_question_prompt = PROJECT_ROOT / "evals/dataset_generator/prompts/validation_question.md"
+
+# Initial generation settings for evaluation dataset
+NUM_COMPANIES = 10
+STATEMENT_LIMIT = 5
+QUESTIONS_PER_BATCH = 8
