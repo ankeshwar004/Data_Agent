@@ -10,7 +10,7 @@ def build_case(question_data: dict, fact_lookup: dict) -> dict:
     facts = [fact_lookup[fact_id] for fact_id in fact_ids]
 
     if len(facts) != 1:
-        raise ValueError("Currenlty supports single-fact questions only")
+        raise ValueError("Currently supports single-fact questions only")
 
     fact = facts[0]
 

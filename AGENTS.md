@@ -2,75 +2,71 @@
 
 ## Overview
 
-This repository contains an **Antigravity‑powered autonomous agent** designed for advanced coding, data‑analysis, and research tasks. The agent operates in a sandboxed environment with access to a rich set of tools (file I/O, command execution, sub‑agents, scheduling, etc.) and follows a strict policy to preserve system integrity and security.
+Financial Data Agent — a command-line tool that answers natural-language
+financial questions. It fetches company data from Financial Modeling Prep
+(FMP), stores it in PostgreSQL, and generates answers via a LangGraph
+multi-agent workflow (Data Agent → ETL Agent → SQL Agent).
 
-## Core Capabilities
+## Project Layout
 
-- **Code Generation & Refactoring** – Write, edit, and format source files across multiple languages.
-- **Tool Invocation** – Execute shell commands, run background processes, schedule recurring jobs, and manage tasks.
-- **Research & Knowledge Retrieval** – Use sub‑agents to read files, perform web searches, and explore codebases without polluting the main context.
-- **Collaboration** – Communicate with other agents via `send_message`, invoke specialized sub‑agents, and leverage the Antigravity plugin ecosystem.
-- **Safety & Policy Enforcement** – Enforces sandbox boundaries, respects access controls, and never circumvents authentication or permission checks.
+```
+agents/           LangGraph workflows (data_agent, etl_agent, sql_agent)
+database/         PostgreSQL persistence: connection pool, schema, mapper,
+                  coverage checks, ETL service, financial repository
+Models/           Pydantic state schemas shared across agents
+utils/            LLM picker, prompt templates, ETL tools
+evals/            Synthetic evaluation-dataset generator pipeline
+eval/             Fixed-case evaluation harness (offline + live)
+tests/            Unit tests
+fmp_client.py     FMP API client (HTTP, validation, auth)
+config.py         Environment loading (.env) and application settings
+main.py           CLI entry point
+```
 
-## Configuration
+## Key Workflows
 
-- **Model**: Uses the **GPT‑OSS 120B (Medium)** model for reasoning and code generation.
-- **Workspace**: `/workspaces/Data_Agent`
-- **Artifact Directory**: `/home/codespace/.gemini/antigravity/brain/<conversation-id>`
-- **Sandbox**: All `run_command` calls execute in a standard sandbox unless explicitly overridden with `BypassSandbox:true` after user approval.
+1. **Question → Answer** (`main.py` → `agents/data_agent.py`)
+   - Extract ticker, datasets, years from the question.
+   - Check PostgreSQL coverage; fetch missing data via ETL.
+   - Generate and safety-check a SQL query; execute read-only.
+   - Verify the result and return a natural-language answer.
 
-## Available Tools & Commands
+2. **ETL** (`database/etl_service.py`)
+   - Fetch from FMP, map camelCase → snake_case (`database/mapper.py`),
+     upsert into PostgreSQL (`database/financial_repository.py`).
 
-| Tool | Description |
-|------|-------------|
-| `read_file` | Read text files (up to 800 lines per call). |
-| `write_file` | Create or overwrite files (use for artifacts when needed). |
-| `edit_file` | Perform precise in‑place edits. |
-| `run_command` | Execute shell commands. Supports `IsDaemon` and `WaitMsBeforeAsync`. |
-| `list_plugin_accounts` | List connected plugin accounts for authentication. |
-| `manage_task` | Inspect, kill, or send input to background tasks. |
-| `schedule` | Create one‑shot timers or recurring cron jobs. |
-| `invoke_subagent` / `define_subagent` | Spawn helper agents for isolated research or heavy processing. |
-| `search_web` | Perform web searches (subject to network permissions). |
-| `search_marketplace` | Find plugins/skills from the Antigravity Marketplace. |
-| `ask_question` | Prompt the user with structured multiple‑choice queries. |
+3. **Evaluation Dataset Generation** (`evals/dataset_generator/pipeline.py`)
+   - Fetch real data → extract atomic facts → LLM generates questions →
+     LLM validates → assemble ground-truth cases.
 
-## Typical Workflow
+## Environment
 
-1. **Understand the request** – Parse the user’s intent and plan a step‑by‑step approach.
-2. **Research** – Use `read_file`, `search_web`, or a `research` sub‑agent to gather context.
-3. **Generate or modify code** – Write new files with `write_file` or edit existing ones with `edit_file`.
-4. **Execute & Test** – Run commands via `run_command`, optionally in the background, and capture output.
-5. **Iterate** – Refine based on test results, user feedback, or additional research.
-6. **Document** – Update `README.md`, `AGENT.md`, or other documentation artifacts.
+Required variables (in `.env` at project root):
 
-## Development & Testing
+| Variable | Purpose |
+|----------|---------|
+| `FMP_API_KEY` | Financial Modeling Prep API key |
+| `OPENROUTER_API_KEY` | LLM access via OpenRouter |
+| `DATABASE_URL` | PostgreSQL connection string |
 
-- Run unit or integration tests using the standard `run_command` pattern, e.g.:
-  ```bash
-  run_command "pytest -q" --toolSummary "Run tests"
-  ```
-- Use the `schedule` tool for long‑running monitoring jobs (e.g., nightly data validation). 
-- Leverage sub‑agents for heavy parallel work to keep the main conversation responsive.
+## Running
 
-## Security & Compliance
+```bash
+# Answer a question
+venv/bin/python main.py "What was Apple's revenue in 2024?"
 
-- No network access is granted by default; all external calls must be approved by the user.
-- The agent never modifies files outside the workspace or the artifact directory without explicit instruction.
-- All actions are logged; you can inspect background tasks via `manage_task list`.
+# Run tests
+venv/bin/python -m pytest tests/
 
-## Extending the Agent
+# Run offline evaluation
+python -m eval.run_eval
 
-- **Plugins** – Install Antigravity plugins from the marketplace to add capabilities such as Google Docs integration, GitHub actions, cloud deployments, etc.
-- **Custom Skills** – Add new `.skill` directories under `skills/` to encapsulate reusable workflows.
-- **MCP Servers** – Deploy custom MCP (Modular Compute Platform) servers for specialized services (e.g., database back‑ends, authentication).
+# Generate synthetic evaluation dataset
+python -m evals.dataset_generator.pipeline
+```
 
 ## References
 
-- [/workspaces/Data_Agent/Instruction.md](file:///workspaces/Data_Agent/Instruction.md)
-- [/workspaces/Data_Agent/next_step.txt](file:///workspaces/Data_Agent/next_step.txt)
-- Antigravity Documentation: `agy` CLI and SDK (see built‑in `antigravity-guide` skill).
-
----
-
-*Generated by Antigravity agent on 2026‑11‑02.*
+- [next_step.txt](file:///workspaces/Data_Agent/next_step.txt) — current evaluation priorities
+- [README.md](file:///workspaces/Data_Agent/README.md) — full setup and usage guide
+- [evals/dataset_generator/README.md](file:///workspaces/Data_Agent/evals/dataset_generator/README.md) — dataset generator docs

@@ -1,4 +1,6 @@
 import json
+import logging
+
 from collections import defaultdict
 from pathlib import Path
 
@@ -8,6 +10,8 @@ from evals.dataset_generator.fact_extractor import extract_company_facts
 from evals.dataset_generator.question_generator import QuestionGenerator
 from evals.dataset_generator.validator import DatasetValidator
 
+
+logger = logging.getLogger(__name__)
 
 def run_pipeline():
 
@@ -34,7 +38,7 @@ def run_pipeline():
 
         all_facts.extend(facts)
 
-    print(f"Extracted {len(all_facts)} facts")
+    logger.info(f"Extracted {len(all_facts)} facts")
 
     # 3. Save facts for reproducibility.
     OUTPUT_DIR.mkdir(
@@ -69,14 +73,14 @@ def run_pipeline():
 
             all_questions.extend(questions)
 
-            print(
+            logger.info(
                 f"Generated {len(questions)} "
                 f"questions for {key[0]}"
             )
 
         except Exception as exc:
 
-            print(f"Generation failed for {key}: {exc}")
+            logger.info(f"Generation failed for {key}: {exc}")
 
     # 6. Validate and assemble ground truth.
     accepted, rejected = validator.validate(
@@ -108,7 +112,11 @@ def run_pipeline():
         encoding="utf-8"
     )
 
-    (OUTPUT_DIR / "rejected.json").write_text(
+    rejected_path = (
+        OUTPUT_DIR / "rejected.json"
+    )
+    
+    rejected_path.write_text(
         json.dumps(
             rejected,
             indent=2,
@@ -117,14 +125,13 @@ def run_pipeline():
         encoding="utf-8"
     )
 
-    print("\nDataset generation complete")
+    logger.info("\nDataset generation complete")
 
-    print(f"Facts: {len(all_facts)}")
-    print(f"Generated: {len(all_questions)}")
-    print(f"Accepted: {len(accepted)}")
-    print(f"Rejected: {len(rejected)}")
+    logger.info(f"Facts: {len(all_facts)}")
+    logger.info(f"Generated: {len(all_questions)}")
+    logger.info(f"Accepted: {len(accepted)}")
+    logger.info(f"Rejected: {len(rejected)}")
 
-    print(f"Output: {output_path}")
 
 
 if __name__ == "__main__":

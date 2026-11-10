@@ -32,7 +32,7 @@ OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL","nvidia/nemotron-3-ultra-550b-a5
 FIXTURE_DIR = PROJECT_ROOT / "eval/datasets/fixtures/fmp"
 OUTPUT_DIR = PROJECT_ROOT / "eval/datasets/generated"
 
-question_generation_prompt = PROJECT_ROOT / "evals/dataset_generator/prompts/question_generation..md"
+question_generation_prompt = PROJECT_ROOT / "evals/dataset_generator/prompts/question_generation.md"
 validation_question_prompt = PROJECT_ROOT / "evals/dataset_generator/prompts/validation_question.md"
 
 # Initial generation settings for evaluation dataset

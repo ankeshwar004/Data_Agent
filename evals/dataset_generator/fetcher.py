@@ -1,8 +1,7 @@
 import json
+import logging
 import random
 from datetime import datetime, timezone
-
-import requests
 
 from fmp_client import FMPClient
 
@@ -12,6 +11,8 @@ from config import (
     STATEMENT_LIMIT
 )
 
+logger = logging.getLogger(__name__)
+
 
 class DatasetFetcher:
 
@@ -19,14 +20,14 @@ class DatasetFetcher:
         self.client = FMPClient()
         FIXTURE_DIR.mkdir(parents=True, exist_ok=True)
 
-    def get_company_universe(self)-> set:
+    def get_company_universe(self)-> list:
         """
         Fetches the list of all available stock symbols from the Financial Modeling Prep API.
         """
 
         url = f"{self.client.BASE_URL}/stock-list"
 
-        response = self.client.session.get(url,timeout=30)
+        response = self.client.session.get(url, params={"apikey": self.client.api_key}, timeout=30)
         response.raise_for_status()
 
         data = response.json()
@@ -105,9 +106,9 @@ class DatasetFetcher:
 
                 results.append(data)
 
-                print(f"Fetched {ticker}")
+                logger.info("Fetched %s", ticker)
                 
             except Exception as exc:
-                print(f"Skipped {ticker}: {exc}")
+                logger.warning("Skipped %s: %s", ticker, exc)
 
         return results

@@ -180,6 +180,16 @@ requested years.
 │   ├── offline.py           # Deterministic fixture evaluation
 │   ├── live.py              # PostgreSQL/FMP/LLM evaluation
 │   └── run_eval.py          # CLI entry point
+├── evals/
+│   ├── base_model.py        # Pydantic schemas for question generation/validation
+│   └── dataset_generator/   # Synthetic evaluation-dataset pipeline
+│       ├── pipeline.py      # End-to-end orchestrator
+│       ├── fetcher.py       # Fetch company data from FMP
+│       ├── fact_extractor.py # Convert statements → atomic facts
+│       ├── question_generator.py # LLM question generation
+│       ├── answer_builder.py # Ground-truth case assembly
+│       ├── validator.py     # Deduplicate + LLM-validate questions
+│       └── prompts/         # LLM prompt templates
 └── tests/                   # Unit tests for agents and database services
 ```
 

@@ -1,4 +1,3 @@
-"""Converts an entire FMP statement into individual facts."""
 import hashlib
 import math
 from decimal import Decimal, InvalidOperation
@@ -145,27 +144,3 @@ def extract_company_facts(ticker: str, company: str, statements: dict[str, list[
             all_facts.extend(facts)
 
     return all_facts
-
-
-
-# You should call your existing mapping functions before passing records to the extractor.
-# mapped_statements = {
-#     "balance_sheet": [
-#         map_balance_sheet(record)
-#         for record in balance_sheet_records
-#     ],
-
-#     "cash_flow_statement": [
-#         map_cash_flow_statement(record)
-#         for record in cash_flow_records
-#     ],
-
-#     # Add your existing income statement mapper here.
-# }
-
-# facts = extract_company_facts(
-#     ticker="AAPL",
-#     company="Apple Inc.",
-#     statements=mapped_statements,
-#     periods={"FY"},
-# )
