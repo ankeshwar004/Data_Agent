@@ -64,7 +64,7 @@ class EvidenceBuilder:
 
             # Profit/loss is a semantic interpretation of net income, not a new
             # question-type enum. Python determines the interpretation from its sign.
-            if fact["metric"] == "net_income":
+            if fact["statement"] == "income_statement" and fact["metric"] == "net_income":
                 evidence.append(_make_evidence(
                     "profitability",
                     [fact],
