@@ -1,24 +1,21 @@
 import json
 import logging
 
-from collections import defaultdict
-from pathlib import Path
-
 from config import OUTPUT_DIR
 from evals.dataset_generator.fetcher import DatasetFetcher
 from evals.dataset_generator.fact_extractor import extract_company_facts
+from evals.dataset_generator.evidence_builder import EvidenceBuilder
 from evals.dataset_generator.question_generator import QuestionGenerator
 from evals.dataset_generator.validator import DatasetValidator
 
 
 logger = logging.getLogger(__name__)
 
+
 def run_pipeline():
-
     fetcher = DatasetFetcher()
-
+    evidence_builder = EvidenceBuilder()
     generator = QuestionGenerator()
-
     validator = DatasetValidator()
 
     all_facts = []
@@ -27,111 +24,68 @@ def run_pipeline():
     # 1. Fetch company financial data.
     companies = fetcher.run()
 
-    # 2. Extract atomic facts.
+    # 2. Extract atomic facts (the source of truth).
     for company in companies:
-
         facts = extract_company_facts(
             ticker=company["ticker"],
             company=company["company_name"],
             statements=company["statements"],
         )
-
         all_facts.extend(facts)
 
-    logger.info(f"Extracted {len(all_facts)} facts")
+    logger.info("Extracted %s atomic facts", len(all_facts))
 
-    # 3. Save facts for reproducibility.
-    OUTPUT_DIR.mkdir(
-        parents=True,
-        exist_ok=True
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    (OUTPUT_DIR / "facts.json").write_text(
+        json.dumps(all_facts, indent=2, default=str),
+        encoding="utf-8",
     )
 
-    facts_path = OUTPUT_DIR / "facts.json"
-
-    facts_path.write_text(
-        json.dumps(
-            all_facts,
-            indent=2,
-            default=str
-        ),
-        encoding="utf-8"
+    # 3. Build deterministic evidence units from compatible facts.
+    all_evidence = evidence_builder.build(all_facts)
+    (OUTPUT_DIR / "evidence.json").write_text(
+        json.dumps(all_evidence, indent=2, default=str),
+        encoding="utf-8",
     )
+    logger.info("Built %s evidence items", len(all_evidence))
 
-    # 4. Group facts by company and statement.
-    groups = defaultdict(list)
+    # 4. Let the LLM generate multiple questions from evidence batches.
+    all_questions = generator.generate(all_evidence)
+    logger.info("Generated %s questions", len(all_questions))
 
-    for fact in all_facts:
-
-        key = (fact["ticker"],fact["statement"])
-        groups[key].append(fact)
-
-    # 5. Generate questions.
-    for key, facts in groups.items():
-
-        try:
-            questions = generator.generate(facts)
-
-            all_questions.extend(questions)
-
-            logger.info(
-                f"Generated {len(questions)} "
-                f"questions for {key[0]}"
-            )
-
-        except Exception as exc:
-
-            logger.info(f"Generation failed for {key}: {exc}")
-
-    # 6. Validate and assemble ground truth.
+    # 5. Validate each question and calculate its ground-truth answer in Python.
     accepted, rejected = validator.validate(
         all_questions,
-        all_facts
+        all_evidence,
+        all_facts,
     )
 
-    # 7. Save final dataset.
     dataset = {
-        "version": 1,
-        "generation_method": "hybrid",
+        "version": 2,
+        "generation_method": "evidence_based_hybrid",
         "total_facts": len(all_facts),
+        "total_evidence": len(all_evidence),
         "generated_questions": len(all_questions),
         "accepted_questions": len(accepted),
         "rejected_questions": len(rejected),
-        "cases": accepted
+        "cases": accepted,
     }
-
-    output_path = (
-        OUTPUT_DIR / "evaluation_dataset.json"
+    (OUTPUT_DIR / "evaluation_dataset.json").write_text(
+        json.dumps(dataset, indent=2, default=str),
+        encoding="utf-8",
+    )
+    (OUTPUT_DIR / "rejected.json").write_text(
+        json.dumps(rejected, indent=2, default=str),
+        encoding="utf-8",
     )
 
-    output_path.write_text(
-        json.dumps(
-            dataset,
-            indent=2,
-            default=str
-        ),
-        encoding="utf-8"
-    )
-
-    rejected_path = (
-        OUTPUT_DIR / "rejected.json"
-    )
-    
-    rejected_path.write_text(
-        json.dumps(
-            rejected,
-            indent=2,
-            default=str
-        ),
-        encoding="utf-8"
-    )
-
-    logger.info("\nDataset generation complete")
-
-    logger.info(f"Facts: {len(all_facts)}")
-    logger.info(f"Generated: {len(all_questions)}")
-    logger.info(f"Accepted: {len(accepted)}")
-    logger.info(f"Rejected: {len(rejected)}")
-
+    logger.info("Dataset generation complete")
+    logger.info("Facts: %s", len(all_facts))
+    logger.info("Evidence: %s", len(all_evidence))
+    logger.info("Generated: %s", len(all_questions))
+    logger.info("Accepted: %s", len(accepted))
+    logger.info("Rejected: %s", len(rejected))
 
 
 if __name__ == "__main__":
