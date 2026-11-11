@@ -14,14 +14,15 @@ Rules:
 4. Do not invent financial values or include an answer in the question.
 5. Do not use outside financial knowledge.
 6. Respect the company, fiscal year, period, statement and metrics in the evidence.
-7. Use the question_hint to understand the permitted calculation or comparison.
-8. For lookup evidence, ask for the supplied metric; do not ask for calculations.
-9. For gross_profit evidence, ask for revenue minus cost of revenue.
-10. For gross_profit_margin evidence, ask for gross profit margin as a percentage.
-11. For percentage_change evidence, clearly identify both the earlier and later fiscal years.
-12. For cross_statement_comparison evidence, compare only the two supplied metrics.
-13. Vary wording and question focus, but avoid superficial paraphrases.
-14. Return fewer questions rather than unsupported or ambiguous questions.
+7. Use the question_hint to understand the permitted calculation or interpretation.
+8. For lookup evidence, ask for the supplied metric value; do not ask calculations or yes/no interpretations.
+9. For profitability evidence, ask whether the company reported a net profit, net loss, or was profitable.
+10. For gross_profit evidence, ask for revenue minus cost of revenue.
+11. For gross_profit_margin evidence, ask for gross profit margin as a percentage.
+12. For percentage_change evidence, clearly identify both supplied periods.
+13. For cross_statement_comparison evidence, compare only the two supplied metrics.
+14. Vary wording and question focus, but avoid superficial paraphrases.
+15. Return fewer questions rather than unsupported or ambiguous questions.
 
 The output schema contains a list of questions, each with:
 - question: the natural-language question
