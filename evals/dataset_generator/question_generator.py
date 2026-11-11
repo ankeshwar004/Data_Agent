@@ -1,5 +1,5 @@
 import json
-from collections import defaultdict
+from collections import defaultdict, deque
 
 from config import QUESTIONS_PER_BATCH, question_generation_prompt
 from evals.base_model import QuestionGenerationSchema
@@ -15,17 +15,33 @@ class QuestionGenerator:
         self.llm = get_llm("low").with_structured_output(QuestionGenerationSchema)
         self.prompt = question_generation_prompt.read_text(encoding="utf-8")
 
+    def _interleave_operations(self, items: list[dict]) -> list[dict]:
+        # EvidenceBuilder emits many lookup items. Interleave operation buckets so
+        # each LLM batch can contain retrieval, calculations and comparisons.
+        buckets = defaultdict(deque)
+        for item in items:
+            buckets[item["operation"]].append(item)
+
+        ordered = []
+        operations = sorted(buckets)
+        while any(buckets.values()):
+            for operation in operations:
+                if buckets[operation]:
+                    ordered.append(buckets[operation].popleft())
+        return ordered
+
     def generate(self, evidence_items: list[dict]) -> list[dict]:
-        # Keep a company's evidence together where possible. Evidence may span
-        # statements, so grouping by statement here would lose cross-statement cases.
+        # Keep a company's evidence together; cross-statement evidence remains intact.
         by_ticker = defaultdict(list)
         for item in evidence_items:
             by_ticker[item["ticker"]].append(item)
 
         generated = []
         for ticker, ticker_evidence in by_ticker.items():
-            for start in range(0, len(ticker_evidence), self.EVIDENCE_PER_BATCH):
-                batch = ticker_evidence[start:start + self.EVIDENCE_PER_BATCH]
+            balanced_evidence = self._interleave_operations(ticker_evidence)
+
+            for start in range(0, len(balanced_evidence), self.EVIDENCE_PER_BATCH):
+                batch = balanced_evidence[start:start + self.EVIDENCE_PER_BATCH]
 
                 # Do not expose numeric financial values to the question LLM.
                 context = [
