@@ -11,12 +11,13 @@ Check:
 1. Is the question answerable using ONLY the supplied evidence and its allowed operation?
 2. Does it refer to the correct company?
 3. Does it refer to the correct fiscal year or years and period?
-4. Does it request the correct metric or comparison?
+4. Does it request the correct metric or interpretation?
 5. Does it match the evidence operation? For example, lookup is not a calculation.
-6. For percentage change, are both the earlier and later periods clear?
-7. For cross-statement comparison, are both supplied metrics and the same period clear?
-8. Are the referenced facts sufficient?
-9. Is the question ambiguous, misleading, or asking for outside knowledge?
+6. For profitability evidence, does it ask about profit/loss status based on net income?
+7. For percentage change, are both the earlier and later periods clear?
+8. For cross-statement comparison, are both supplied metrics and the same period clear?
+9. Are the referenced facts sufficient?
+10. Is the question ambiguous, misleading, or asking for outside knowledge?
 
 Reject questions that require facts or calculations not supported by the evidence.
 Do not reject a question merely because its answer requires arithmetic when the
