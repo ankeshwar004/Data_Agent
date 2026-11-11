@@ -41,7 +41,7 @@ flowchart TD
 | Operation | Facts used | Ground-truth calculation |
 |---|---|---|
 | lookup | One atomic fact | Return the source value |
-| gross_profit | Revenue + cost of revenue | Revenue − cost of revenue |
+| profitability | Net income | Positive = net profit; negative = net loss; zero = break-even |\n| gross_profit | Revenue + cost of revenue | Revenue − cost of revenue |
 | gross_profit_margin | Revenue + cost of revenue | (Revenue − cost of revenue) / Revenue × 100 |
 | percentage_change | Same metric in two fiscal years | (Current − previous) / abs(previous) × 100 |
 | cross_statement_comparison | Operating cash flow + net income for the same period | Boolean comparison |
