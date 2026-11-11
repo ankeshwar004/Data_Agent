@@ -46,26 +46,34 @@ def _make_evidence(
 
 
 class EvidenceBuilder:
-    """
-    Creates answerable evidence units from atomic facts.
-
-    Atomic facts remain the source of truth. Evidence only describes which facts
-    may be used together and which deterministic Python operation is allowed.
-    No financial values are copied into the evidence sent to the question LLM.
-    """
+    """Build compatible, deterministic evidence units from atomic facts."""
 
     def build(self, facts: list[dict]) -> list[dict]:
         evidence: list[dict] = []
 
-        # Every atomic fact is independently usable for direct retrieval.
+        # Atomic facts remain available for direct retrieval questions.
         for fact in facts:
             evidence.append(_make_evidence(
                 "lookup",
                 [fact],
-                question_hint="Ask for this exact financial metric for this company and period.",
+                question_hint=(
+                    "Ask for the exact value of this metric for this company and period. "
+                    "Do not turn it into a yes/no interpretation question."
+                ),
             ))
 
-        # Index facts by company, fiscal period and statement.
+            # Profit/loss is a semantic interpretation of net income, not a new
+            # question-type enum. Python determines the interpretation from its sign.
+            if fact["metric"] == "net_income":
+                evidence.append(_make_evidence(
+                    "profitability",
+                    [fact],
+                    question_hint=(
+                        "Ask whether the company reported a net profit or net loss "
+                        "for this period, or whether it was profitable."
+                    ),
+                ))
+
         by_period: dict[tuple, dict[tuple[str, str], dict]] = defaultdict(dict)
         by_metric: dict[tuple, list[dict]] = defaultdict(list)
 
@@ -87,8 +95,7 @@ class EvidenceBuilder:
             )
             by_metric[metric_key].append(fact)
 
-        # Financial calculations supported by explicit, well-defined inputs.
-        for period_key, indexed in by_period.items():
+        for indexed in by_period.values():
             revenue = indexed.get(("income_statement", "revenue"))
             cost = indexed.get(("income_statement", "cost_of_revenue"))
 
@@ -116,7 +123,6 @@ class EvidenceBuilder:
                         question_hint="Ask for gross profit margin as a percentage.",
                     ))
 
-            # Compare operating cash flow with net income for the same period.
             net_income = indexed.get(("income_statement", "net_income"))
             operating_cash_flow = indexed.get(("cash_flow_statement", "operating_cash_flow"))
             if net_income and operating_cash_flow:
@@ -130,17 +136,16 @@ class EvidenceBuilder:
                     },
                     question_hint=(
                         "Ask whether operating cash flow was greater than net income "
-                                               "for the same fiscal period."
+                        "for the same fiscal period."
                     ),
                 ))
 
-        # Compare the same metric across consecutive available fiscal years.
-        for metric_key, metric_facts in by_metric.items():
+        # Same metric, statement, period and currency across available years.
+        for metric_facts in by_metric.values():
             ordered = sorted(
                 metric_facts,
-                key=lambda item: (str(item["fiscal_year"]), str(item.get("report_date") or "")),
+                key=lambda item: (int(item["fiscal_year"]), str(item.get("report_date") or "")),
             )
-            # There should be at most one record per fiscal year/period for this key.
             deduplicated = {}
             for fact in ordered:
                 deduplicated[str(fact["fiscal_year"])] = fact
@@ -161,10 +166,10 @@ class EvidenceBuilder:
                     },
                     question_hint=(
                         f"Ask how {current['metric_label']} changed in percentage terms "
-                        f"from FY{previous['fiscal_year']} to FY{current['fiscal_year']}."
+                        f"from {previous['period']} {previous['fiscal_year']} to "
+                        f"{current['period']} {current['fiscal_year']}."
                     ),
                 ))
 
-        # Deterministic IDs also make duplicate evidence easy to remove.
         unique = {item["evidence_id"]: item for item in evidence}
         return list(unique.values())
