@@ -1,302 +1,136 @@
 # Dataset Generator
 
-Synthetic evaluation-dataset pipeline for the financial-data AI agent.  
-It fetches real financial data from the [FMP API](https://financialmodelingprep.com/), extracts atomic facts, asks an LLM to write natural-language questions, validates those questions with a second LLM pass, and assembles a ground-truth evaluation dataset.
-
----
-
-## Table of Contents
-
-- [Directory Structure](#directory-structure)
-- [Architecture](#architecture)
-- [Pipeline Flow](#pipeline-flow)
-- [Module Reference](#module-reference)
-- [Key Assumptions](#key-assumptions)
-- [Configuration](#configuration)
-- [Outputs](#outputs)
-- [Running the Pipeline](#running-the-pipeline)
-
----
-
-## Directory Structure
-
-```
-evals/dataset_generator/
-├── pipeline.py            # Orchestrator — runs the full end-to-end pipeline
-├── fetcher.py             # Step 1 — fetch company data from FMP API
-├── fact_extractor.py      # Step 2 — convert raw financial statements → atomic facts
-├── question_generator.py  # Step 3 — LLM generates questions from facts
-├── answer_builder.py      # Step 4 — assemble a ground-truth evaluation case
-├── validator.py           # Step 5 — deduplicate + LLM-validate each question
-└── prompts/
-    ├── question_generation.md     # System prompt for question generation LLM
-    └── validation_question.md     # System prompt for validation LLM
-```
-
----
+Synthetic evaluation-dataset pipeline for the financial-data AI agent. It fetches real
+financial data from FMP, extracts atomic facts, constructs answerable evidence in Python,
+asks an LLM to generate multiple natural-language questions, calculates ground truth in
+Python, and validates each question.
 
 ## Architecture
 
-```mermaid
+~~~mermaid
 flowchart TD
-    A["FMP API\n(financial data)"] -->|HTTP| B["fetcher.py\nDatasetFetcher"]
-    B -->|raw company dicts| C["fact_extractor.py\nextract_company_facts"]
-    C -->|atomic facts| D["question_generator.py\nQuestionGenerator"]
-    D -->|generated questions| E["validator.py\nDatasetValidator"]
-    E --> F{Valid?}
-    F -->|Yes| G["answer_builder.py\nbuild_case"]
-    G --> H["evaluation_dataset.json"]
-    F -->|No| I["rejected.json"]
-    B -->|raw JSON| J["fixtures/fmp/TICKER.json"]
-    C -->|all facts| K["facts.json"]
-```
+    A["FMP API"] --> B["fetcher.py"]
+    B --> C["fact_extractor.py"]
+    C --> D["Atomic facts"]
+    D --> E["evidence_builder.py"]
+    E --> F["Evidence items"]
+    F --> G["question_generator.py"]
+    G --> H["Generated questions"]
+    H --> I["answer_builder.py"]
+    I --> J["Python ground truth"]
+    J --> K["validator.py"]
+    K --> L["evaluation_dataset.json"]
+    K --> M["rejected.json"]
+~~~
 
----
+## Design principles
 
-## Pipeline Flow
+- **Atomic facts are the source of truth.** Each fact points to one numeric field from
+  one mapped FMP statement record.
+- **Evidence is the question-generation unit.** Python decides which facts are compatible
+  and which deterministic operation may be applied to them.
+- **The LLM writes questions, not answers.** The question-generation LLM receives IDs,
+  metric names, periods, allowed operations and hints, but not financial values.
+- **Python calculates expected answers.** The answer builder uses original fact values
+  and a small, explicit operation registry. It never executes arbitrary LLM-supplied code.
+- **Tags are derived metadata.** capability_tags are assigned by Python from the evidence
+  operation; the LLM does not need to classify its own questions.
 
-The five steps executed by `pipeline.py`:
+## Supported evidence operations
 
-| Step | Module | Description |
-|------|--------|-------------|
-| 1 | `fetcher.py` | Randomly samples `NUM_COMPANIES` tickers, fetches profile + 3 financial statements from FMP, saves JSON fixtures |
-| 2 | `fact_extractor.py` | Maps each numeric field in each statement period into a **fact** dict with a deterministic `fact_id` |
-| 3 | `question_generator.py` | Groups facts by `(ticker, statement)`, sends metadata (no raw values) to an LLM to write questions |
-| 4 | `validator.py` | Deduplicates questions, validates each with a second LLM call, filters bad/ambiguous questions |
-| 5 | `answer_builder.py` | Builds a ground-truth case dict containing the question, expected value, and provenance |
+| Operation | Facts used | Ground-truth calculation |
+|---|---|---|
+| lookup | One atomic fact | Return the source value |
+| gross_profit | Revenue + cost of revenue | Revenue − cost of revenue |
+| gross_profit_margin | Revenue + cost of revenue | (Revenue − cost of revenue) / Revenue × 100 |
+| percentage_change | Same metric in two fiscal years | (Current − previous) / abs(previous) × 100 |
+| cross_statement_comparison | Operating cash flow + net income for the same period | Boolean comparison |
 
----
+This is an intentionally explicit first set of operations. Add new operations in
+evidence_builder.py and answer_builder.py together, with deterministic tests, rather
+than allowing the LLM to invent formulas.
 
-## Module Reference
+## Directory structure
 
-### `pipeline.py`
+~~~text
+evals/dataset_generator/
+├── pipeline.py
+├── fetcher.py
+├── fact_extractor.py
+├── evidence_builder.py
+├── question_generator.py
+├── answer_builder.py
+├── validator.py
+└── prompts/
+    ├── question_generation.md
+    └── validation_question.md
+~~~
 
-`DatasetPipeline` is the entry point. It encapsulates the collaborators and calls
-each stage in sequence, writing three output files. Collaborators can be
-injected for isolated tests.
+## Pipeline stages
 
-```
-DatasetPipeline().run()
-  ├── fetcher.run()                   → list[company_dict]
-  ├── extract_company_facts(...)      → list[fact]
-  ├── generator.generate(facts)       → list[question]
-  └── validator.validate(questions)   → (accepted, rejected)
-```
+1. **Fetch:** DatasetFetcher fetches company profile and mapped financial statements.
+2. **Extract:** extract_company_facts converts numeric mapped fields into atomic facts
+   with deterministic fact_id values.
+3. **Build evidence:** EvidenceBuilder.build creates single-fact lookup evidence,
+   supported financial calculations, same-metric year comparisons, and cross-statement
+   comparisons. It checks that the required facts exist in the same company/period and
+   currency context.
+4. **Generate questions:** QuestionGenerator.generate groups evidence by ticker, sends
+   bounded batches to the LLM, and asks for approximately QUESTIONS_PER_BATCH questions
+   per batch. Each generated question must reference exactly one evidence_id. That
+   evidence item can itself reference multiple atomic facts.
+5. **Calculate and validate:** build_case computes the expected answer from source facts.
+   DatasetValidator checks IDs and duplicates, then asks a second LLM pass whether the
+   question is supported by the evidence and allowed operation.
+6. **Save:** facts, evidence, accepted cases and rejected questions are written under
+   OUTPUT_DIR.
 
----
+## Evidence schema
 
-### `fetcher.py` — `DatasetFetcher`
+An evidence item contains an evidence_id, operation, fact_ids, parameters, company and
+period metadata, metric names, and a question_hint. For example, a gross-profit-margin
+evidence item references revenue and cost_of_revenue and permits the formula
+(revenue - cost_of_revenue) / revenue * 100.
 
-| Method | Purpose |
-|--------|---------|
-| `get_company_universe()` | Calls `/stock-list` on FMP; returns all available tickers |
-| `select_companies(seed)` | Deterministic random sample of `NUM_COMPANIES` tickers |
-| `fetch_company_data(ticker)` | Fetches profile + income statement + balance sheet + cash-flow |
-| `save_fixture(ticker, data)` | Persists raw response as `FIXTURE_DIR/<TICKER>.json` |
-| `run()` | Orchestrates all of the above; skips tickers that raise exceptions |
-
-**Fixture schema saved per ticker:**
-```json
-{
-  "fetched_at": "<ISO-8601 UTC>",
-  "data": {
-    "ticker": "AAPL",
-    "company_name": "Apple Inc.",
-    "profile": { },
-    "statements": {
-      "income_statement": [ ],
-      "balance_sheet": [ ],
-      "cash_flow_statement": [ ]
-    }
-  }
-}
-```
-
----
-
-### `fact_extractor.py`
-
-Converts raw FMP statement records (already mapped via `database/mapper.py`) into **atomic facts**.
-
-| Function | Purpose |
-|----------|---------|
-| `is_numeric(value)` | Returns `True` for finite numbers; rejects `None`, booleans, NaN, infinity |
-| `make_fact_id(...)` | SHA-256 of `ticker:statement:fiscal_year:period:metric:report_date` → 16-hex-char ID |
-| `extract_facts_from_record(...)` | Iterates all non-metadata numeric fields in one statement period |
-| `extract_company_facts(...)` | Iterates all statement types and all periods for one company |
-
-**Fact schema:**
-```json
-{
-  "fact_id": "a1b2c3d4e5f6a7b8",
-  "ticker": "AAPL",
-  "company": "Apple Inc.",
-  "statement": "income_statement",
-  "metric": "net_income",
-  "metric_label": "Net Income",
-  "value": 96995000000,
-  "fiscal_year": 2023,
-  "period": "FY",
-  "report_date": "2023-09-30",
-  "currency": "USD",
-  "filing_date": "2023-11-02",
-  "accepted_date": "2023-11-02T18:01:14.000Z"
-}
-```
-
-> **Important:** `fact_extractor.py` expects **mapped** records (from `database/mapper.py`).  
-> Do **not** pass raw FMP JSON directly — field names differ.
-
----
-
-### `question_generator.py` — `QuestionGenerator`
-
-Uses a **"low" tier LLM** (via `utils/llm_picker.py`) with structured output (`QuestionGenerationSchema`).
-
-- Facts are grouped by `(ticker, statement)` in the pipeline before being passed here.
-- **Financial values are deliberately withheld** from the LLM — only metadata (metric name, year, period, currency) is sent. This prevents the LLM from hallucinating numeric answers.
-- Output is validated against `QuestionGenerationSchema` (Pydantic), which enforces `fact_ids` linkage.
-
-**LLM input sent:**
-```json
-[
-  {
-    "fact_id": "a1b2c3d4e5f6a7b8",
-    "company": "Apple Inc.",
-    "ticker": "AAPL",
-    "metric": "Net Income",
-    "year": 2023,
-    "period": "FY",
-    "currency": "USD"
-  }
-]
-```
-
-**Prompt file:** `prompts/question_generation.md`
-
----
-
-### `answer_builder.py` — `build_case`
-
-Assembles the final evaluation case from a validated question and the fact lookup dict.
-
-> **Note:** Currently supports **single-fact questions only** (`len(facts) == 1`).  
-> Multi-fact (calculation) questions are planned but not yet implemented.
-
-**Case schema:**
-```json
-{
-  "id": "generated-<12-hex>",
-  "group": "generated",
-  "question": "What was Apple's net income for fiscal year 2023?",
-  "ticker": "AAPL",
-  "year": 2023,
-  "metric": "net_income",
-  "value": 96995000000,
-  "dataset": "income_statement",
-  "period": "FY",
-  "currency": "USD",
-  "expected": {
-    "fact_ids": ["a1b2c3d4e5f6a7b8"],
-    "facts": [ {} ]
-  },
-  "source": {
-    "provider": "FMP",
-    "endpoint": "income_statement",
-    "report_date": "2023-09-30"
-  }
-}
-```
-
----
-
-### `validator.py` — `DatasetValidator`
-
-Two-pass validation:
-
-**Pass 1 — Structural checks (Python):**
-- `fact_ids` is a list of length exactly 1
-- Question text is non-empty
-- All referenced `fact_id`s exist in the fact lookup
-- Question is not a duplicate (normalized via whitespace collapsing + lowercase)
-
-**Pass 2 — LLM check:**
-- Sends the question + referenced facts to the validation LLM
-- LLM returns `{valid: bool, reason: str}` (`QuestionValidationSchema`)
-- If `valid == False`, the question is rejected with the LLM's reason
-
-**Pass 3 — Determinism assertion:**
-- After acceptance, re-runs `build_case` and asserts `case["value"] == original["value"]`
-
-**Prompt file:** `prompts/validation_question.md`
-
----
-
-## Key Assumptions
-
-| # | Assumption |
-|---|-----------|
-| 1 | Statement records are **pre-mapped** (via `database/mapper.py`) before entering `fact_extractor.py`. The pipeline does this mapping automatically via `STATEMENT_MAPPERS`. Raw FMP field names are not supported directly by the extractor. |
-| 2 | Only **single-fact questions** are generated and validated. Multi-metric calculation questions are not yet supported. |
-| 3 | The random seed `42` in `select_companies()` ensures **reproducible company selection** across runs given the same FMP stock universe. |
-| 4 | Financial **values are never shown to the question-generation LLM** — only metric names and years — to avoid the LLM baking in numbers. |
-| 5 | The pipeline uses a **"low" tier LLM** (cheap/fast model) for both generation and validation; accuracy vs. cost can be tuned in `llm_picker.py`. |
-| 6 | Facts are keyed by a **deterministic SHA-256 ID** (`fact_id`); re-running the pipeline with the same data produces identical fact IDs. |
-| 7 | The `accepted_date` and `filing_date` fields may be `None` for some FMP records; they are stored as-is and serialized with `default=str`. |
-| 8 | Questions referencing unknown or mismatched `fact_ids` are **silently rejected** (not raised as errors) to keep the pipeline resilient. |
-
----
-
-## Configuration
-
-All settings live in the top-level `config.py`:
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `NUM_COMPANIES` | `10` | Number of tickers to sample per pipeline run |
-| `STATEMENT_LIMIT` | `5` | Max periods fetched per financial statement |
-| `QUESTIONS_PER_BATCH` | `8` | Target questions per fact group (passed to LLM prompt) |
-| `FIXTURE_DIR` | `eval/datasets/fixtures/fmp/` | Where raw FMP fixtures are saved |
-| `OUTPUT_DIR` | `eval/datasets/generated/` | Where the final dataset files are written |
-| `question_generation_prompt` | `evals/dataset_generator/prompts/question_generation.md` | Path to LLM question-gen prompt |
-| `validation_question_prompt` | `evals/dataset_generator/prompts/validation_question.md` | Path to LLM validation prompt |
-
-> **Important:** `FMP_API_KEY` must be set as an environment variable (or in `.env`).  
-> The pipeline will raise `RuntimeError` at startup if it is missing.
-
----
+The LLM returns only the question and its evidence reference. Python adds
+capability_tags, source provenance, fact references, and the calculated answer to the
+final case. Tags currently include retrieval, calculation, multi_fact, ratio, comparison,
+multi_period, and cross_statement, as appropriate.
 
 ## Outputs
 
 | File | Description |
-|------|-------------|
-| `eval/datasets/fixtures/fmp/<TICKER>.json` | Raw FMP responses per company (for reproducibility/replay) |
-| `eval/datasets/generated/facts.json` | All extracted atomic facts |
-| `eval/datasets/generated/evaluation_dataset.json` | Final accepted evaluation cases + summary stats |
-| `eval/datasets/generated/rejected.json` | Rejected questions with rejection reasons |
+|---|---|
+| facts.json | Extracted atomic facts |
+| evidence.json | Python-constructed evidence items |
+| evaluation_dataset.json | Accepted evaluation cases and run statistics |
+| rejected.json | Questions rejected by structural, calculation, or LLM validation |
 
-**`evaluation_dataset.json` top-level schema:**
-```json
-{
-  "version": 1,
-  "generation_method": "hybrid",
-  "total_facts": 840,
-  "generated_questions": 72,
-  "accepted_questions": 58,
-  "rejected_questions": 14,
-  "cases": []
-}
-```
+The final case preserves the existing top-level question, ticker, year, metric, value,
+dataset, period, and currency fields for compatibility. It also includes capability_tags
+and an expected object with the operation, evidence ID, source facts, and answer details.
 
----
+## Configuration and execution
 
-## Running the Pipeline
+The generator uses the existing settings in root config.py, including NUM_COMPANIES,
+STATEMENT_LIMIT, QUESTIONS_PER_BATCH, OUTPUT_DIR, question_generation_prompt, and
+validation_question_prompt.
 
-```bash
-# From the project root
-export FMP_API_KEY=your_key_here
+Set FMP_API_KEY and the configured LLM provider credentials, then run from the
+repository root:
 
+~~~bash
 python -m evals.dataset_generator.pipeline
-# or
-python evals/dataset_generator/pipeline.py
-```
+~~~
+
+## Important limitations
+
+- The initial derived operations are deliberately limited to formulas implemented in
+  Python. They do not attempt to support every possible financial calculation.
+- Percentage change is skipped when the earlier value is zero.
+- Evidence is only created when all required source facts exist with compatible company,
+  period, and currency metadata.
+- The LLM can produce several questions from one batch, but each question must point to
+  one evidence item. The evidence item may reference one or multiple facts.
+- Review generated/rejected samples and add unit tests for each new financial operation
+  before expanding the operation registry.
