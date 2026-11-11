@@ -69,8 +69,7 @@ class EvidenceBuilder:
                     "profitability",
                     [fact],
                     question_hint=(
-                        "Ask whether the company reported a net profit or net loss "
-                        "for this period, or whether it was profitable."
+                        "Ask whether the company was profitable in this period (yes/no), based on net income."
                     ),
                 ))
 
