@@ -1,27 +1,29 @@
 from __future__ import annotations
 
 from pydantic import BaseModel, Field
-from typing import Literal
+
 
 class GeneratedQuestionSchema(BaseModel):
-    question: str = Field(description="A natural-language question supported by the supplied facts.")
-    fact_ids: list[str] = Field(description="Fact IDs needed to answer the question.")
-    question_type: Literal["single_fact"] = Field(
-        description="The type of question generated from the supplied facts."
+    question: str = Field(
+        description="A natural-language question answerable from one supplied evidence item."
+    )
+    evidence_id: str = Field(
+        description="The exact evidence_id that supports this question."
     )
 
 
 class QuestionGenerationSchema(BaseModel):
     questions: list[GeneratedQuestionSchema] = Field(
         default_factory=list,
-        description="Questions generated from the supplied financial facts.",
+        description="Multiple diverse questions generated from the supplied evidence.",
     )
 
 
 class QuestionValidationSchema(BaseModel):
     valid: bool = Field(
-        description="Whether the question is fully supported by the referenced facts."
+        description="Whether the question is fully supported by the referenced evidence."
     )
     reason: str = Field(
         description="Brief explanation for the validation decision."
     )
+}
