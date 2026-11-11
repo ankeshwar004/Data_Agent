@@ -24,6 +24,7 @@ def _as_json_number(value: Decimal):
 def _derive_tags(operation: str, fact_count: int) -> list[str]:
     tags = {
         "lookup": ["retrieval"],
+        "profitability": ["financial_interpretation"],
         "gross_profit": ["calculation", "multi_fact"],
         "gross_profit_margin": ["calculation", "ratio", "multi_fact"],
         "percentage_change": ["calculation", "comparison", "multi_period"],
@@ -43,6 +44,23 @@ def _calculate(evidence: dict, fact_lookup: dict) -> dict:
     if operation == "lookup":
         result = _number(facts[0]["value"])
         return {"value": _as_json_number(result), "unit": facts[0].get("currency")}
+
+    if operation == "profitability":
+        net_income = _number(facts[0]["value"])
+        if net_income > 0:
+            interpretation = "net_profit"
+        elif net_income < 0:
+            interpretation = "net_loss"
+        else:
+            interpretation = "break_even"
+        return {
+            "value": net_income > 0,
+            "unit": "boolean",
+            "details": {
+                "net_income": _as_json_number(net_income),
+                "interpretation": interpretation,
+            },
+        }
 
     if operation in {"gross_profit", "gross_profit_margin"}:
         revenue = _number(fact_lookup[params["revenue_fact_id"]]["value"])
