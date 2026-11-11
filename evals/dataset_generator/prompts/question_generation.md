@@ -16,7 +16,7 @@ Rules:
 6. Respect the company, fiscal year, period, statement and metrics in the evidence.
 7. Use the question_hint to understand the permitted calculation or interpretation.
 8. For lookup evidence, ask for the supplied metric value; do not ask calculations or yes/no interpretations.
-9. For profitability evidence, ask whether the company reported a net profit, net loss, or was profitable.
+9. For profitability evidence, ask a yes/no question about whether the company was profitable.
 10. For gross_profit evidence, ask for revenue minus cost of revenue.
 11. For gross_profit_margin evidence, ask for gross profit margin as a percentage.
 12. For percentage_change evidence, clearly identify both supplied periods.
