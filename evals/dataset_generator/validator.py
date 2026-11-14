@@ -53,7 +53,6 @@ class DatasetValidator:
                 # Build first so unsupported operations or invalid arithmetic are
                 # rejected deterministically before spending an LLM validation call.
                 case = build_case(question_data, evidence_lookup, fact_lookup)
-                referenced_facts = [fact_lookup[fact_id] for fact_id in fact_ids]
 
                 validation_input = {
                     "question": question,
@@ -69,7 +68,7 @@ class DatasetValidator:
                         "metrics": evidence["metrics"],
                         "question_hint": evidence["question_hint"],
                     },
-                    "facts": referenced_facts,
+                    "facts": case["expected"]["facts"],
                     "python_computed_answer": case["expected"]["answer"],
                 }
 

@@ -6,6 +6,13 @@ from evals.base_model import QuestionGenerationSchema
 from utils.llm_picker import get_llm
 
 
+# Exclude source values and internal IDs from the question-generation prompt.
+PROMPT_EVIDENCE_FIELDS = (
+    "evidence_id", "operation", "company", "ticker", "fiscal_year", "period",
+    "currency", "statements", "metrics", "metric_labels", "question_hint",
+)
+
+
 class QuestionGenerator:
     """Generate multiple questions from Python-constructed evidence batches."""
 
@@ -45,19 +52,7 @@ class QuestionGenerator:
 
                 # Do not expose numeric financial values to the question LLM.
                 context = [
-                    {
-                        "evidence_id": item["evidence_id"],
-                        "operation": item["operation"],
-                        "company": item["company"],
-                        "ticker": item["ticker"],
-                        "fiscal_year": item["fiscal_year"],
-                        "period": item["period"],
-                        "currency": item.get("currency"),
-                        "statements": item["statements"],
-                        "metrics": item["metrics"],
-                        "metric_labels": item["metric_labels"],
-                        "question_hint": item["question_hint"],
-                    }
+                    {field: item.get(field) for field in PROMPT_EVIDENCE_FIELDS}
                     for item in batch
                 ]
 

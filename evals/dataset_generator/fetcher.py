@@ -5,10 +5,11 @@ from datetime import datetime, timezone
 
 from fmp_client import FMPClient
 
-from config import (
-    FIXTURE_DIR,
-    NUM_COMPANIES,
-    STATEMENT_LIMIT
+from config import FIXTURE_DIR, NUM_COMPANIES, STATEMENT_LIMIT
+from database.mapper import (
+    map_balance_sheet,
+    map_cash_flow_statement,
+    map_income_statement,
 )
 
 logger = logging.getLogger(__name__)
@@ -62,12 +63,13 @@ class DatasetFetcher:
 
         statements = {}
 
-        for name, endpoint in [
-            ("income_statement", "income-statement"),
-            ("balance_sheet", "balance-sheet-statement"),
-            ("cash_flow_statement", "cash-flow-statement")
+        for name, endpoint, mapper in [
+            ("income_statement", "income-statement", map_income_statement),
+            ("balance_sheet", "balance-sheet-statement", map_balance_sheet),
+            ("cash_flow_statement", "cash-flow-statement", map_cash_flow_statement),
         ]:
-            statements[name] = self.client.fetch(endpoint, ticker, limit=STATEMENT_LIMIT)
+            records = self.client.fetch(endpoint, ticker, limit=STATEMENT_LIMIT)
+            statements[name] = [mapper(record) for record in records]
 
         return {
             "ticker": ticker,

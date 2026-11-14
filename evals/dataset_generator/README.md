@@ -41,7 +41,8 @@ flowchart TD
 | Operation | Facts used | Ground-truth calculation |
 |---|---|---|
 | lookup | One atomic fact | Return the source value |
-| profitability | Net income | Positive = net profit; negative = net loss; zero = break-even |\n| gross_profit | Revenue + cost of revenue | Revenue − cost of revenue |
+| profitability | Net income | Positive = net profit; negative = net loss; zero = break-even |
+| gross_profit | Revenue + cost of revenue | Revenue − cost of revenue |
 | gross_profit_margin | Revenue + cost of revenue | (Revenue − cost of revenue) / Revenue × 100 |
 | percentage_change | Same metric in two fiscal years | (Current − previous) / abs(previous) × 100 |
 | cross_statement_comparison | Operating cash flow + net income for the same period | Boolean comparison |
@@ -71,7 +72,7 @@ evals/dataset_generator/
 1. **Fetch:** DatasetFetcher fetches company profile and mapped financial statements.
 2. **Extract:** extract_company_facts converts numeric mapped fields into atomic facts
    with deterministic fact_id values.
-3. **Build evidence:** EvidenceBuilder.build creates single-fact lookup evidence,
+3. **Build evidence:** build_evidence creates single-fact lookup evidence,
    supported financial calculations, same-metric year comparisons, and cross-statement
    comparisons. It checks that the required facts exist in the same company/period and
    currency context.

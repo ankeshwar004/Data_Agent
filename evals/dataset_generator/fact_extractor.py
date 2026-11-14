@@ -1,5 +1,4 @@
 import hashlib
-import math
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -55,26 +54,18 @@ def extract_facts_from_record(ticker: str, company: str, statement: str, mapped_
     All numeric fields except metadata are treated as financial metrics.
     """
 
-    facts = []
-
     fiscal_year = mapped_record.get("fiscal_year")
     period = mapped_record.get("period")
     report_date = mapped_record.get("report_date")
 
-    currency = mapped_record.get("reported_currency")
-
     if fiscal_year is None:
         raise ValueError(f"Missing fiscal_year for {ticker}")
-
     if not period:
         raise ValueError(f"Missing period for {ticker}")
 
+    facts = []
     for metric, value in mapped_record.items():
-
-        if metric in METADATA_FIELDS:
-            continue
-
-        if not is_numeric(value):
+        if metric in METADATA_FIELDS or not is_numeric(value):
             continue
 
         fact_id = make_fact_id(
@@ -102,7 +93,7 @@ def extract_facts_from_record(ticker: str, company: str, statement: str, mapped_
             "period": period,
             "report_date": report_date,
 
-            "currency": currency,
+            "currency": mapped_record.get("reported_currency"),
             "filing_date": mapped_record.get("filing_date"),
             "accepted_date": mapped_record.get("accepted_date"),
         })
@@ -130,17 +121,15 @@ def extract_company_facts(ticker: str, company: str, statements: dict[str, list[
 
         for record in records:
 
-            if periods is not None:
-                if record.get("period") not in periods:
-                    continue
+            if periods is  None or record.get("period")  in periods:
+                    
+                facts = extract_facts_from_record(
+                    ticker=ticker,
+                    company=company,
+                    statement=statement,
+                    mapped_record=record,
+                )
 
-            facts = extract_facts_from_record(
-                ticker=ticker,
-                company=company,
-                statement=statement,
-                mapped_record=record,
-            )
-
-            all_facts.extend(facts)
+                all_facts.extend(facts)
 
     return all_facts
