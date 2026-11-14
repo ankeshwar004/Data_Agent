@@ -218,5 +218,7 @@ __marimo__/
 .streamlit/secrets.toml
 
 .agents
+.kilo
 
 imp_point.txt
+next_step.txt
