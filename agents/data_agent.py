@@ -10,6 +10,7 @@ from agents.sql_agent import build_sql_graph
 from database.coverage import check_requested_coverage
 
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import StateGraph, START, END
 from langchain.tools import tool
 
@@ -17,7 +18,7 @@ from langchain.tools import tool
 logger = logging.getLogger(__name__)
 
 
-def extract_query_entities(state: DataAgentSchema) -> DataAgentSchema:
+def extract_query_entities(state: DataAgentSchema, config: RunnableConfig) -> DataAgentSchema:
     """
     Extracts ticker symbol, requested financial datasets, and periods/years
     from the user query using structured output.
@@ -28,7 +29,7 @@ def extract_query_entities(state: DataAgentSchema) -> DataAgentSchema:
 
     llm = get_llm("low").with_structured_output(QueryExtractionSchema)
     chain = extract_query_entities_prompt | llm
-    extraction: QueryExtractionSchema = chain.invoke({"user_query": query})
+    extraction: QueryExtractionSchema = chain.invoke({"user_query": query}, config=config)
 
     state.ticker = extraction.ticker.strip().upper()
     state.requested_datasets = list(extraction.datasets)
@@ -37,7 +38,7 @@ def extract_query_entities(state: DataAgentSchema) -> DataAgentSchema:
     return state
 
 
-def inspect_data_node(state: DataAgentSchema) -> DataAgentSchema:
+def inspect_data_node(state: DataAgentSchema, config: RunnableConfig) -> DataAgentSchema:
     """
     Inspects the database coverage for the requested datasets and periods.
     It's main purpose is to determine which data is available and which is missing, guiding the next steps in the data processing workflow.
@@ -61,7 +62,7 @@ def inspect_data_node(state: DataAgentSchema) -> DataAgentSchema:
     return state
 
 
-def next_action_node(state: DataAgentSchema) -> DataAgentSchema:
+def next_action_node(state: DataAgentSchema, config: RunnableConfig) -> DataAgentSchema:
     """
     Choose the next action from observed database state.
     """
@@ -103,7 +104,7 @@ def next_action_node(state: DataAgentSchema) -> DataAgentSchema:
     return state
 
 
-def etl_node(state: DataAgentSchema) -> DataAgentSchema:
+def etl_node( state: DataAgentSchema, config: RunnableConfig) -> DataAgentSchema:
     """
     Fetch missing financial data through the ETL specialist subgraph.
     """
@@ -124,7 +125,8 @@ def etl_node(state: DataAgentSchema) -> DataAgentSchema:
                 "ticker": state.ticker,
                 "dataset": dataset,
                 "required_years": missing_years,
-            }
+            },
+            config=config,
         )
         response = (
             response.model_dump()
@@ -153,7 +155,7 @@ def etl_node(state: DataAgentSchema) -> DataAgentSchema:
 
 
 
-def sql_node(state: DataAgentSchema) -> DataAgentSchema:
+def sql_node(state: DataAgentSchema, config: RunnableConfig) -> DataAgentSchema:
     """
     Routes the user's query to the SQL agent for processing.
     """
@@ -190,7 +192,8 @@ def sql_node(state: DataAgentSchema) -> DataAgentSchema:
             "generated_sql_query": previous_sql,
             "sql_execution_error": previous_sql_error,
             "prompt_query_context": retry_context,
-        }
+        },
+        config=config,
     )
     
     response = response.model_dump()  
@@ -217,7 +220,7 @@ def sql_node(state: DataAgentSchema) -> DataAgentSchema:
 
 
 
-def verify_result_node(state: DataAgentSchema) -> DataAgentSchema:
+def verify_result_node(state: DataAgentSchema, config: RunnableConfig) -> DataAgentSchema:
     """
     Two-stage verification of SQL execution, query correctness, and answer accuracy.
 
@@ -247,7 +250,7 @@ def verify_result_node(state: DataAgentSchema) -> DataAgentSchema:
             "sql_query": state.generated_sql_query,
             "sql_result": str(state.sql_query_result),
             "final_answer": state.final_answer,
-        })
+        }, config=config)
 
         state.verification_passed = verdict.passed
         state.verification_reason = verdict.reason
@@ -282,7 +285,7 @@ def _route_after_verification(state: DataAgentSchema) -> DataAgentSchema:
 
 
 
-def failure_node(state: DataAgentSchema) -> DataAgentSchema:
+def failure_node(state: DataAgentSchema, config: RunnableConfig) -> DataAgentSchema:
     """
     Handles failure scenarios and sets the final answer accordingly.
     """

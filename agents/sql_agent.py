@@ -12,6 +12,7 @@ from utils.prompts import prompt_generate_sql_query , sql_query_judge_prompt, fi
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 
 
@@ -23,7 +24,7 @@ logger = logging.getLogger(__name__)
 ABLATION_FORCE_NO_SAMPLES: bool = False
 
 
-def curate_ques(state:AgentSchema)-> AgentSchema:
+def curate_ques(state: AgentSchema, config: RunnableConfig) -> AgentSchema:
     """
     Curate( cureate mean  to make clear, structured, and useful ) the user's question to make it clear, structured, and useful for
     the next step.
@@ -32,7 +33,7 @@ def curate_ques(state:AgentSchema)-> AgentSchema:
     llm=get_llm("low")
     
     response_chain = curate_question_prompt | llm | StrOutputParser()
-    response = response_chain.invoke({ "user_question": user_query })
+    response = response_chain.invoke({ "user_question": user_query }, config=config)
     
     state.curated_ques=response
     state.messages=state.messages + [HumanMessage(content=f"{response}")] # check late if this correct  or add response in AIMessage 
@@ -41,7 +42,7 @@ def curate_ques(state:AgentSchema)-> AgentSchema:
 
     
 
-def generate_sql_query(state: AgentSchema)-> AgentSchema:
+def generate_sql_query(state: AgentSchema, config: RunnableConfig) -> AgentSchema:
     """
     Generates an SQL query based on the curated question and the schema details of the database.
     """
@@ -66,7 +67,7 @@ def generate_sql_query(state: AgentSchema)-> AgentSchema:
         "curated_ques": curated_ques,
         "schema_info": schema_details,
         "retry_context": state.prompt_query_context,
-    })
+    }, config=config)
     
     state.generated_sql_query=response
     
@@ -74,7 +75,7 @@ def generate_sql_query(state: AgentSchema)-> AgentSchema:
     
 
 
-def is_sql_query_safe(state: AgentSchema)-> AgentSchema:
+def is_sql_query_safe(state: AgentSchema, config: RunnableConfig) -> AgentSchema:
     """
     Checks whether the generated SQL query is safe to execute or not.
     """
@@ -86,7 +87,7 @@ def is_sql_query_safe(state: AgentSchema)-> AgentSchema:
     llm_judge = llm.with_structured_output(JudgeSchema)
     
     chain = sql_query_judge_prompt | llm_judge
-    response = chain.invoke({ "sql_query": sql_query })  
+    response = chain.invoke({ "sql_query": sql_query }, config=config)
     
     state.is_safe = response.is_safe  
     state.comments = response.comments
@@ -95,7 +96,7 @@ def is_sql_query_safe(state: AgentSchema)-> AgentSchema:
 
 
 
-def canceled_sql_query(state: AgentSchema)-> AgentSchema:
+def canceled_sql_query(state: AgentSchema, config: RunnableConfig) -> AgentSchema:
     """
     Cancels the execution of the SQL query and provides a final answer.
     """
@@ -110,7 +111,7 @@ def canceled_sql_query(state: AgentSchema)-> AgentSchema:
 
 
 
-def execute_sql_query(state: AgentSchema)-> AgentSchema:
+def execute_sql_query(state: AgentSchema, config: RunnableConfig) -> AgentSchema:
     """
     Executes the generated SQL query and stores the result in the state.
     """
@@ -134,7 +135,7 @@ def execute_sql_query(state: AgentSchema)-> AgentSchema:
     return state
 
 
-def generate_final_answer(state: AgentSchema)-> AgentSchema:
+def generate_final_answer(state: AgentSchema, config: RunnableConfig) -> AgentSchema:
     """
     Generates a final answer based on the execution result of the SQL query and the user's original question.
     """
@@ -144,7 +145,7 @@ def generate_final_answer(state: AgentSchema)-> AgentSchema:
     llm=get_llm("low")
         
     response_chain = final_answer_prompt | llm | StrOutputParser()
-    response = response_chain.invoke({ "curated_ques": curated_ques, "query_result": str(sql_query_result) })
+    response = response_chain.invoke({ "curated_ques": curated_ques, "query_result": str(sql_query_result) }, config=config)
     
     state.final_answer=response
     state.messages=state.messages + [AIMessage(content=f"{response}")]

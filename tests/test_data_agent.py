@@ -18,7 +18,7 @@ def test_etl_stops_when_retry_limit_is_reached():
         ],
     )
 
-    result = next_action_node(state)
+    result = next_action_node(state, {})
 
     assert result.next_action == "fail"
     assert any(
@@ -37,7 +37,7 @@ def test_etl_is_attempted_when_retries_remain():
         max_attempts=3,
     )
 
-    result = next_action_node(state)
+    result = next_action_node(state, {})
 
     assert result.next_action == "fetch_missing_data"
 
@@ -46,7 +46,7 @@ def test_etl_node_invokes_the_etl_subgraph(monkeypatch):
     calls = []
 
     class FakeETLGraph:
-        def invoke(self, task):
+        def invoke(self, task, config=None):
             calls.append(task)
             return {
                 "result": {
@@ -68,7 +68,7 @@ def test_etl_node_invokes_the_etl_subgraph(monkeypatch):
         missing_data={"income_statement": [2024]},
     )
 
-    result = etl_node(state)
+    result = etl_node(state, {})
 
     assert calls == [
         {
@@ -92,7 +92,7 @@ def test_verify_fails_when_sql_execution_failed():
         max_sql_attempts=3,
     )
 
-    result = verify_result_node(state)
+    result = verify_result_node(state, {})
 
     assert result.verification_passed is False
     assert "SQL execution failed" in result.verification_reason
@@ -110,7 +110,7 @@ def test_verify_fails_when_no_final_answer():
         max_sql_attempts=3,
     )
 
-    result = verify_result_node(state)
+    result = verify_result_node(state, {})
 
     assert result.verification_passed is False
     assert "no final answer" in result.verification_reason.lower()
@@ -146,7 +146,7 @@ def test_verify_passes_with_llm_approval(monkeypatch):
         max_sql_attempts=3,
     )
 
-    result = verify_result_node(state)
+    result = verify_result_node(state, {})
 
     assert result.verification_passed is True
     assert result.next_action == "finish"
@@ -181,7 +181,7 @@ def test_verify_rejects_wrong_answer(monkeypatch):
         max_sql_attempts=3,
     )
 
-    result = verify_result_node(state)
+    result = verify_result_node(state, {})
 
     assert result.verification_passed is False
     assert result.next_action == "query_database"
@@ -216,7 +216,7 @@ def test_verify_empty_result_does_not_auto_retry(monkeypatch):
         max_sql_attempts=3,
     )
 
-    result = verify_result_node(state)
+    result = verify_result_node(state, {})
 
     assert result.verification_passed is True
     assert result.next_action == "finish"
@@ -232,7 +232,7 @@ def test_verify_fails_to_finish_when_attempts_exhausted():
         max_sql_attempts=3,
     )
 
-    result = verify_result_node(state)
+    result = verify_result_node(state, {})
 
     assert result.verification_passed is False
     assert result.next_action == "fail"
@@ -260,7 +260,7 @@ def test_verify_accepts_on_verifier_error(monkeypatch):
         max_sql_attempts=3,
     )
 
-    result = verify_result_node(state)
+    result = verify_result_node(state, {})
 
     assert result.verification_passed is True
     assert result.next_action == "finish"

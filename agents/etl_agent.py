@@ -11,6 +11,7 @@ from database.etl_service import fetch_and_load_company_profile, fetch_and_load_
 from langchain_core.messages import ToolMessage
 from langgraph.graph import StateGraph, START, END
 from langchain.tools import tool
+from langchain_core.runnables import RunnableConfig
 
 
 
@@ -53,20 +54,21 @@ def company_profile_etl(ticker: str) -> dict:
     return fetch_and_load_company_profile(ticker=ticker)
 
 
-def execute_task_node(state: ETLAgentSchema) -> ETLAgentSchema:
+def execute_task_node(state: ETLAgentSchema, config: RunnableConfig) -> ETLAgentSchema:
     """
     Execute a structured ETL task using the deterministic service layer.
     """
     
     if state.dataset == "companies":
-        result = company_profile_etl.invoke({"ticker": state.ticker})
+        result = company_profile_etl.invoke({"ticker": state.ticker}, config=config)
     else:
         result = financial_etl.invoke(
             {
                 "ticker": state.ticker,
                 "dataset": state.dataset,
                 "required_years": state.required_years,
-            }
+            },
+            config=config,
         )
 
     requested_years = state.required_years
@@ -97,7 +99,7 @@ def execute_task_node(state: ETLAgentSchema) -> ETLAgentSchema:
     return state
 
 
-def llm_node(state: ETLAgentSchema)-> ETLAgentSchema:
+def llm_node(state: ETLAgentSchema, config: RunnableConfig) -> ETLAgentSchema:
     """
     Processes the messages in the state using a language model (LLM) and updates the state with the response.
     Acts as a decision-making node that determines whether to invoke a tool or end the process based on the LLM's output.
@@ -108,14 +110,14 @@ def llm_node(state: ETLAgentSchema)-> ETLAgentSchema:
     llm=get_llm("low")
     tools = [extract_load_tool, financial_etl, company_profile_etl]
     chain = etl_prompt | llm.bind_tools(tools)
-    response = chain.invoke({ "messages": messages })
+    response = chain.invoke({ "messages": messages }, config=config)
     
     state.messages=state.messages + [response]
     return state
     
     
 
-def tool_node(state: ETLAgentSchema)-> ETLAgentSchema:
+def tool_node(state: ETLAgentSchema, config: RunnableConfig) -> ETLAgentSchema:
     """
     This node is responsible for invoking the appropriate tool based on the user's question and the context provided by the LLM.
     """
@@ -130,7 +132,7 @@ def tool_node(state: ETLAgentSchema)-> ETLAgentSchema:
         selected_tool = tool_by_name.get(tool_call["name"])
         if selected_tool is None:
             raise ValueError(f"Unknown ETL tool requested: {tool_call['name']}")
-        observation = selected_tool.invoke(tool_call["args"])
+        observation = selected_tool.invoke(tool_call["args"], config=config)
         
         tools_result.append(
             ToolMessage(content=json.dumps(observation, default=str), tool_call_id=tool_call["id"])

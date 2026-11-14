@@ -26,4 +26,3 @@ class QuestionValidationSchema(BaseModel):
     reason: str = Field(
         description="Brief explanation for the validation decision."
     )
-}

@@ -10,7 +10,7 @@ def test_rejected_sql_returns_safety_message():
         comments="Query attempts to modify the database.",
     )
 
-    result = canceled_sql_query(state)
+    result = canceled_sql_query(state, {})
 
     assert result.sql_execution_success is False
     assert "not safe to execute" in result.final_answer.lower()
@@ -37,7 +37,7 @@ def test_llm_judge_rejection_is_recorded(monkeypatch):
         generated_sql_query="DELETE FROM companies"
     )
 
-    result = is_sql_query_safe(state)
+    result = is_sql_query_safe(state, {})
 
     assert result.is_safe == "No"
     assert "modify data" in result.comments
